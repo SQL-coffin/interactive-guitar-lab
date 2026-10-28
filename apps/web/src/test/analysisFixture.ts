@@ -9,7 +9,7 @@ const SILENT = chroma([]);
 /** Real backend (analyzeChromaProgression) output for C, C, silence, C, G, G (one-second windows). */
 export function analysisFixture(): AudioAnalysisResponse {
   const frames = [C, C, SILENT, C, G, G].map((values, i) => ({ startSeconds: i, endSeconds: i + 1, chroma: values, bassPitchClass: null }));
-  const audio = { schemaVersion: "1.0" as const, filename: "take.wav", durationSeconds: 6, sampleRate: 22050, windowSeconds: 1, windowingMode: "fixed-window" as const, rhythm: { tempoBpm: 90, beatTimesSeconds: [0.5, 1.2], timeSignatureNumerator: null, timeSignatureDenominator: null, meterConfidence: null, barDurationSeconds: null, downbeatTimesSeconds: [] } };
+  const audio = { schemaVersion: "1.0" as const, filename: "take.wav", durationSeconds: 6, sampleRate: 22050, windowSeconds: 1, windowStrategy: "manual" as const, windowingMode: "fixed-window" as const, rhythm: { tempoBpm: 90, beatTimesSeconds: [0.5, 1.2], timeSignatureNumerator: null, timeSignatureDenominator: null, meterConfidence: null, barDurationSeconds: null, downbeatTimesSeconds: [] } };
   const chordAnalysis = analyzeChromaProgression(frames, { chordQualities: ["major", "minor"], progressionOptions: { limit: 2 } });
   return {
     audio,

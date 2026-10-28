@@ -125,6 +125,15 @@ export async function POST(request: Request): Promise<Response> {
     }
   }
 
+  const strategyText = form.get("windowStrategy");
+  let windowStrategy: "manual" | "auto" | undefined;
+  if (strategyText !== null) {
+    if (typeof strategyText !== "string" || (strategyText !== "manual" && strategyText !== "auto")) {
+      return apiError(400, "invalid_request", "windowStrategy must be either manual or auto.");
+    }
+    windowStrategy = strategyText;
+  }
+
   const optionsText = form.get("options");
   let rawOptions: unknown;
   if (optionsText !== null) {
@@ -144,6 +153,7 @@ export async function POST(request: Request): Promise<Response> {
       baseUrl: process.env.AUDIO_WORKER_URL ?? "http://127.0.0.1:8010",
       filename: uploaded.name || "audio-upload",
       ...(windowSeconds === undefined ? {} : { windowSeconds }),
+      ...(windowStrategy === undefined ? {} : { windowStrategy }),
       chordAnalysis,
       // Stop the worker request when the browser cancels or disconnects.
       signal: request.signal,

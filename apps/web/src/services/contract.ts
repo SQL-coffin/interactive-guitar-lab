@@ -89,6 +89,8 @@ export interface AudioAnalysisRequest {
   filename?: string;
   /** Analysis window length, 0.1–2.0 seconds. */
   windowSeconds?: number;
+  /** Backend window selection strategy; omitted to retain manual behavior. */
+  windowStrategy?: "manual" | "auto";
   /** Sent as the JSON-encoded `options` form field. */
   options?: ChromaProgressionAnalysisOptions;
 }

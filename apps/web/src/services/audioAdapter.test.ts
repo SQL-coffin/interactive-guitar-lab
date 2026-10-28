@@ -39,7 +39,7 @@ describe("http adapter: audio analysis", () => {
   it("posts multipart form data, reports upload progress, and returns the parsed body", async () => {
     const onUploadProgress = vi.fn();
     const pending = service().analyzeAudio(
-      { file, windowSeconds: 1, options: { chordCandidateLimit: 3, progressionOptions: { limit: 2 } } },
+      { file, windowSeconds: 1, windowStrategy: "auto", options: { chordCandidateLimit: 3, progressionOptions: { limit: 2 } } },
       { onUploadProgress },
     );
     const xhr = FakeXhr.last;

@@ -70,6 +70,28 @@ describe("audio worker HTTP client", () => {
     });
   });
 
+  it("forwards auto strategy and accepts adaptive beat-aligned responses", async () => {
+    const payload = {
+      ...workerPayload(),
+      windowStrategy: "auto",
+      windowingMode: "adaptive-beat-aligned",
+      windowSeconds: 2,
+    };
+    const mockFetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      new Response(JSON.stringify(payload), { status: 200 }));
+    vi.stubGlobal("fetch", mockFetch);
+    const result = await extractAudioFeatures(new Blob(["audio"]), {
+      baseUrl: "http://127.0.0.1:8010",
+      filename: "song.wav",
+      windowStrategy: "auto",
+    });
+    const form = mockFetch.mock.calls[0]![1]?.body as FormData;
+    expect(form.get("windowStrategy")).toBe("auto");
+    expect(result.windowStrategy).toBe("auto");
+    expect(result.windowingMode).toBe("adaptive-beat-aligned");
+    expect(result.windowSeconds).toBe(2);
+  });
+
   it("propagates structured worker errors", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(
       JSON.stringify({ detail: "Unable to decode audio." }),

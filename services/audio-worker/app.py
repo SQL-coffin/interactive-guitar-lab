@@ -53,7 +53,8 @@ class ChromaResponse(ApiModel):
     sample_rate: int = Field(alias="sampleRate")
     window_seconds: float = Field(alias="windowSeconds")
     rhythm: RhythmEstimate
-    windowing_mode: Literal["beat-aligned", "fixed-window"] = Field(default="fixed-window", alias="windowingMode")
+    windowing_mode: Literal["adaptive-beat-aligned", "beat-aligned", "fixed-window"] = Field(default="fixed-window", alias="windowingMode")
+    window_strategy: Literal["manual", "auto"] = Field(default="manual", alias="windowStrategy")
     frames: list[ChromaFrame]
 
 
@@ -182,6 +183,8 @@ def build_analysis_intervals(
     beat_times_seconds: list[float],
     time_signature_numerator: int | None,
     downbeat_times_seconds: list[float],
+    *,
+    allow_unknown_meter_grouping: bool = False,
 ) -> tuple[list[tuple[float, float]], str]:
     """Build a bounded feature grid aligned to detected beats when reliable.
 
@@ -222,9 +225,9 @@ def build_analysis_intervals(
     elif time_signature_numerator == 4:
         grouping_options = [1, 2, 4]
     else:
-        # With no reliable bar grouping, stay on individual beats instead of combining
-        # two beats that might straddle an unknown 3/4 barline.
-        grouping_options = [1]
+        # Manual mode stays on single beats when meter is unknown. Auto mode may combine
+        # at most two beats in stable regions; this is a tradeoff, not a guessed meter.
+        grouping_options = [1, 2] if allow_unknown_meter_grouping else [1]
 
     viable: list[int] = []
     for group_beats in grouping_options:
@@ -268,16 +271,119 @@ def build_analysis_intervals(
     return intervals, "beat-aligned"
 
 
+
+def build_adaptive_analysis_intervals(
+    duration_seconds: float,
+    beat_times_seconds: list[float],
+    time_signature_numerator: int | None,
+    downbeat_times_seconds: list[float],
+    chroma: np.ndarray,
+    frame_times_seconds: np.ndarray,
+) -> tuple[list[tuple[float, float]], str]:
+    """Use longer beat-aligned spans in stable passages and split at likely chord changes.
+
+    A conservative chroma-novelty detector subdivides a coarse beat-aligned grid at
+    likely chord changes. Known meter constrains grouping to supported bar subdivisions;
+    unknown meter allows at most two beats per coarse span. Manual mode is untouched.
+    """
+    if len(beat_times_seconds) < 2:
+        # No trustworthy pulse grid: avoid claiming musical alignment. A one-second
+        # fallback is a predictable compromise for automatic mode.
+        intervals, _ = build_analysis_intervals(
+            duration_seconds, 1.0, [], time_signature_numerator, downbeat_times_seconds
+        )
+        return intervals, "fixed-window"
+
+    beat_times = sorted(set(
+        float(value) for value in beat_times_seconds
+        if math.isfinite(value) and 0 <= value <= duration_seconds
+    ))
+    if len(beat_times) < 2:
+        intervals, _ = build_analysis_intervals(
+            duration_seconds, 1.0, [], time_signature_numerator, downbeat_times_seconds
+        )
+        return intervals, "fixed-window"
+
+    # Start with the coarsest usable grid. Novelty can only subdivide it.
+    base_intervals, base_mode = build_analysis_intervals(
+        duration_seconds,
+        2.0,
+        beat_times,
+        time_signature_numerator,
+        downbeat_times_seconds,
+        allow_unknown_meter_grouping=True,
+    )
+    if base_mode != "beat-aligned" or chroma.ndim != 2 or chroma.shape[1] != frame_times_seconds.size:
+        return base_intervals, base_mode
+
+    beat_vectors: list[np.ndarray] = []
+    for start, end in zip(beat_times, beat_times[1:]):
+        selected = (frame_times_seconds >= start) & (frame_times_seconds < end)
+        if not np.any(selected):
+            beat_vectors.append(np.zeros(chroma.shape[0], dtype=np.float64))
+            continue
+        vector = np.mean(chroma[:, selected], axis=1).astype(np.float64)
+        norm = float(np.linalg.norm(vector))
+        beat_vectors.append(vector / norm if norm > 1e-9 else vector)
+
+    novelty: list[float] = []
+    for left, right in zip(beat_vectors, beat_vectors[1:]):
+        left_norm = float(np.linalg.norm(left))
+        right_norm = float(np.linalg.norm(right))
+        if left_norm <= 1e-9 or right_norm <= 1e-9:
+            novelty.append(0.0)
+        else:
+            similarity = float(np.dot(left, right) / (left_norm * right_norm))
+            novelty.append(max(0.0, min(1.0, 1.0 - similarity)))
+
+    positive = np.asarray([value for value in novelty if value > 1e-6], dtype=np.float64)
+    if positive.size == 0:
+        return base_intervals, "adaptive-beat-aligned"
+
+    median = float(np.median(positive))
+    mad = float(np.median(np.abs(positive - median)))
+    threshold = max(0.16, median + 2.0 * mad)
+    change_times: set[float] = set()
+    for index, value in enumerate(novelty, start=1):
+        # Ignore a transition if it is only a small fluctuation. The fixed floor
+        # prevents uniform noise from creating many tiny frames.
+        if value >= threshold:
+            change_times.add(round(beat_times[index], 4))
+
+    if not change_times:
+        return base_intervals, "adaptive-beat-aligned"
+
+    boundaries = {0.0, duration_seconds}
+    for start, end in base_intervals:
+        boundaries.add(round(start, 4))
+        boundaries.add(round(end, 4))
+        boundaries.update(
+            value for value in change_times if start + 1e-4 < value < end - 1e-4
+        )
+    ordered = sorted(value for value in boundaries if 0 <= value <= duration_seconds)
+    intervals = [
+        (start, end)
+        for start, end in zip(ordered, ordered[1:])
+        if end - start > 1e-4
+    ]
+    if not intervals or len(intervals) > 1200:
+        return base_intervals, "adaptive-beat-aligned"
+    return intervals, "adaptive-beat-aligned"
+
+
 def extract_chroma_features(
     payload: bytes,
     filename: str = "audio-upload",
     window_seconds: float = 0.5,
+    window_strategy: Literal["manual", "auto"] = "manual",
 ) -> dict[str, Any]:
-    """Decode audio and return bounded beat-aligned chroma windows when beat tracking succeeds."""
+    """Decode audio into chroma frames using either manual or adaptive windowing."""
     if not payload:
         raise AudioInputError("The uploaded audio file is empty.")
     if not 0.1 <= window_seconds <= 2.0 or not math.isfinite(window_seconds):
         raise AudioInputError("windowSeconds must be between 0.1 and 2.0.")
+    if window_strategy not in ("manual", "auto"):
+        raise AudioInputError("windowStrategy must be manual or auto.")
 
     try:
         samples, sample_rate = librosa.load(
@@ -392,18 +498,32 @@ def extract_chroma_features(
                                     estimated_beats.append(round(candidate_beat, 4))
                                 candidate_beat += beat_period
                             beat_times_seconds = sorted(set(estimated_beats + original_beats))
-    analysis_intervals, windowing_mode = build_analysis_intervals(
-        duration_seconds,
-        window_seconds,
-        beat_times_seconds,
-        time_signature_numerator,
-        downbeat_times_seconds,
-    )
     frame_times = librosa.frames_to_time(
         np.arange(chroma.shape[1]),
         sr=sample_rate,
         hop_length=HOP_LENGTH,
     )
+    effective_window_seconds = window_seconds
+    if window_strategy == "auto":
+        # Auto ignores the manual target: it starts coarse, then uses chroma novelty
+        # to split around likely chord changes while preserving beat alignment.
+        analysis_intervals, windowing_mode = build_adaptive_analysis_intervals(
+            duration_seconds,
+            beat_times_seconds,
+            time_signature_numerator,
+            downbeat_times_seconds,
+            chroma,
+            frame_times,
+        )
+        effective_window_seconds = 2.0 if windowing_mode == "adaptive-beat-aligned" else 1.0
+    else:
+        analysis_intervals, windowing_mode = build_analysis_intervals(
+            duration_seconds,
+            window_seconds,
+            beat_times_seconds,
+            time_signature_numerator,
+            downbeat_times_seconds,
+        )
 
     # Raw STFT hops are aggregated into either beat-aligned windows or fixed fallback windows.
     # This bounds the response while avoiding arbitrary one-second cuts when beat tracking succeeds.
@@ -440,8 +560,9 @@ def extract_chroma_features(
         "filename": safe_filename,
         "durationSeconds": round(duration_seconds, 4),
         "sampleRate": int(sample_rate),
-        "windowSeconds": window_seconds,
+        "windowSeconds": effective_window_seconds,
         "windowingMode": windowing_mode,
+        "windowStrategy": window_strategy,
         "rhythm": {
             "tempoBpm": tempo_bpm,
             "beatTimesSeconds": beat_times_seconds,
@@ -464,6 +585,7 @@ def health() -> dict[str, str]:
 async def create_chroma_features(
     file: Annotated[UploadFile, File()],
     window_seconds: Annotated[float, Form(alias="windowSeconds", ge=0.1, le=2.0)] = 0.5,
+    window_strategy: Annotated[Literal["manual", "auto"], Form(alias="windowStrategy")] = "manual",
 ) -> dict[str, Any]:
     payload = await file.read(MAX_UPLOAD_BYTES + 1)
     await file.close()
@@ -476,6 +598,7 @@ async def create_chroma_features(
             payload,
             file.filename or "audio-upload",
             window_seconds,
+            window_strategy,
         )
     except AudioInputError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
