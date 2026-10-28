@@ -15,7 +15,7 @@ function fixture(): AudioAnalysisResponse {
     { startSeconds: 0, endSeconds: 1, chroma: chroma([0, 4, 7, 2]), bassPitchClass: 0 }, // C E G D → Cadd9
     { startSeconds: 1, endSeconds: 2, chroma: chroma([0, 4, 8]), bassPitchClass: 0 }, // C E G♯ → Caug
   ];
-  const audio = { schemaVersion: "1.0" as const, filename: "colour.wav", durationSeconds: 2, sampleRate: 22050, windowSeconds: 1, rhythm: { tempoBpm: null, beatTimesSeconds: [] } };
+  const audio = { schemaVersion: "1.0" as const, filename: "colour.wav", durationSeconds: 2, sampleRate: 22050, windowSeconds: 1, windowingMode: "fixed-window" as const, rhythm: { tempoBpm: null, beatTimesSeconds: [], timeSignatureNumerator: null, timeSignatureDenominator: null, meterConfidence: null, barDurationSeconds: null, downbeatTimesSeconds: [] } };
   const chordAnalysis = analyzeChromaProgression(frames, { chordCandidateLimit: 3, voicingsPerChord: 3, progressionOptions: { limit: 1 } });
   return {
     audio,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 import math
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import librosa
 import numpy as np
@@ -39,6 +39,11 @@ class ChromaFrame(ApiModel):
 class RhythmEstimate(ApiModel):
     tempo_bpm: float | None = Field(alias="tempoBpm")
     beat_times_seconds: list[float] = Field(alias="beatTimesSeconds")
+    time_signature_numerator: int | None = Field(default=None, alias="timeSignatureNumerator")
+    time_signature_denominator: int | None = Field(default=None, alias="timeSignatureDenominator")
+    meter_confidence: float | None = Field(default=None, alias="meterConfidence")
+    bar_duration_seconds: float | None = Field(default=None, alias="barDurationSeconds")
+    downbeat_times_seconds: list[float] = Field(default_factory=list, alias="downbeatTimesSeconds")
 
 
 class ChromaResponse(ApiModel):
@@ -48,6 +53,7 @@ class ChromaResponse(ApiModel):
     sample_rate: int = Field(alias="sampleRate")
     window_seconds: float = Field(alias="windowSeconds")
     rhythm: RhythmEstimate
+    windowing_mode: Literal["beat-aligned", "fixed-window"] = Field(default="fixed-window", alias="windowingMode")
     frames: list[ChromaFrame]
 
 
@@ -109,12 +115,165 @@ def estimate_bass_pitch_class(
     return midi % 12
 
 
+def infer_meter_from_beat_strengths(
+    beat_strengths: list[float],
+) -> tuple[int | None, float | None, int | None]:
+    """Conservatively infer simple-meter grouping (3/4 or 4/4) from beat accents.
+
+    Returns (numerator, confidence, downbeat_phase). Uniform or short pulse trains are
+    intentionally left unknown: tempo alone cannot determine a time signature.
+    """
+    values = np.asarray(beat_strengths, dtype=np.float64)
+    if values.size < 12 or not np.all(np.isfinite(values)):
+        return None, None, None
+
+    spread = float(np.std(values))
+    if spread < 1e-6:
+        return None, None, None
+
+    scored: list[tuple[float, int, int]] = []
+    for beats_per_bar in (3, 4):
+        paired = values[:-beats_per_bar]
+        shifted = values[beats_per_bar:]
+        if paired.size < 6 or float(np.std(paired)) < 1e-6 or float(np.std(shifted)) < 1e-6:
+            periodicity = 0.0
+        else:
+            periodicity = float(np.corrcoef(paired, shifted)[0, 1])
+            if not math.isfinite(periodicity):
+                periodicity = 0.0
+        periodicity = max(0.0, min(1.0, periodicity))
+
+        best_phase_score = -1.0
+        best_phase = 0
+        for phase in range(beats_per_bar):
+            downbeats = values[phase::beats_per_bar]
+            mask = np.ones(values.size, dtype=bool)
+            mask[phase::beats_per_bar] = False
+            other_beats = values[mask]
+            if downbeats.size < 3 or other_beats.size < 6:
+                continue
+            # Robustly scale accent prominence; no prominence means the phase is not reliable.
+            prominence = float((np.mean(downbeats) - np.mean(other_beats)) / (spread + 1e-9))
+            prominence = max(0.0, min(1.0, prominence / 1.5))
+            phase_score = 0.65 * periodicity + 0.35 * prominence
+            if phase_score > best_phase_score:
+                best_phase_score = phase_score
+                best_phase = phase
+        if best_phase_score >= 0:
+            scored.append((best_phase_score, beats_per_bar, best_phase))
+
+    if not scored:
+        return None, None, None
+    scored.sort(reverse=True)
+    best_score, best_meter, best_phase = scored[0]
+    runner_up = scored[1][0] if len(scored) > 1 else 0.0
+    margin = best_score - runner_up
+    # Require both a useful score and separation from the competing meter. This is
+    # deliberately conservative until the estimator is evaluated on labelled recordings.
+    if best_score < 0.3 or margin < 0.12:
+        return None, None, None
+    confidence = min(0.85, max(0.0, 0.55 * best_score + 1.5 * margin))
+    return best_meter, round(confidence, 3), best_phase
+
+
+def build_analysis_intervals(
+    duration_seconds: float,
+    target_window_seconds: float,
+    beat_times_seconds: list[float],
+    time_signature_numerator: int | None,
+    downbeat_times_seconds: list[float],
+) -> tuple[list[tuple[float, float]], str]:
+    """Build a bounded feature grid aligned to detected beats when reliable.
+
+    The requested window duration is a target, not a claim that musical events occur
+    every N seconds. Grouping sizes divide a known simple bar where possible.
+    """
+    if len(beat_times_seconds) < 2:
+        count = max(1, math.ceil(duration_seconds / target_window_seconds))
+        return [
+            (index * target_window_seconds, min(duration_seconds, (index + 1) * target_window_seconds))
+            for index in range(count)
+            if index * target_window_seconds < duration_seconds
+        ], "fixed-window"
+
+    beat_times = sorted(set(
+        float(value) for value in beat_times_seconds
+        if math.isfinite(value) and 0 <= value <= duration_seconds
+    ))
+    if len(beat_times) < 2:
+        count = max(1, math.ceil(duration_seconds / target_window_seconds))
+        return [
+            (index * target_window_seconds, min(duration_seconds, (index + 1) * target_window_seconds))
+            for index in range(count)
+            if index * target_window_seconds < duration_seconds
+        ], "fixed-window"
+
+    beat_period = float(np.median(np.diff(beat_times)))
+    if not math.isfinite(beat_period) or beat_period <= 0:
+        count = max(1, math.ceil(duration_seconds / target_window_seconds))
+        return [
+            (index * target_window_seconds, min(duration_seconds, (index + 1) * target_window_seconds))
+            for index in range(count)
+            if index * target_window_seconds < duration_seconds
+        ], "fixed-window"
+
+    if time_signature_numerator == 3:
+        grouping_options = [1, 3]
+    elif time_signature_numerator == 4:
+        grouping_options = [1, 2, 4]
+    else:
+        # With no reliable bar grouping, stay on individual beats instead of combining
+        # two beats that might straddle an unknown 3/4 barline.
+        grouping_options = [1]
+
+    viable: list[int] = []
+    for group_beats in grouping_options:
+        group_duration = beat_period * group_beats
+        estimated_count = math.ceil(duration_seconds / group_duration) + 2
+        if group_duration <= 2.0 and estimated_count <= 1200:
+            viable.append(group_beats)
+
+    if not viable:
+        count = max(1, math.ceil(duration_seconds / target_window_seconds))
+        return [
+            (index * target_window_seconds, min(duration_seconds, (index + 1) * target_window_seconds))
+            for index in range(count)
+            if index * target_window_seconds < duration_seconds
+        ], "fixed-window"
+
+    # Tie-break toward shorter analysis spans so a window is less likely to straddle a chord change.
+    group_beats = min(viable, key=lambda group: (abs(beat_period * group - target_window_seconds), group))
+    anchor_index = 0
+    if downbeat_times_seconds:
+        first_downbeat = downbeat_times_seconds[0]
+        anchor_index = min(range(len(beat_times)), key=lambda index: abs(beat_times[index] - first_downbeat))
+
+    boundary_values = {0.0, duration_seconds}
+    for index, beat_time in enumerate(beat_times):
+        if (index - anchor_index) % group_beats == 0 and 0 < beat_time < duration_seconds:
+            boundary_values.add(round(beat_time, 4))
+    boundaries = sorted(boundary_values)
+    intervals = [
+        (start, end)
+        for start, end in zip(boundaries, boundaries[1:])
+        if end - start > 1e-4
+    ]
+    if not intervals or len(intervals) > 1200:
+        count = max(1, math.ceil(duration_seconds / target_window_seconds))
+        return [
+            (index * target_window_seconds, min(duration_seconds, (index + 1) * target_window_seconds))
+            for index in range(count)
+            if index * target_window_seconds < duration_seconds
+        ], "fixed-window"
+    return intervals, "beat-aligned"
+
+
 def extract_chroma_features(
     payload: bytes,
     filename: str = "audio-upload",
     window_seconds: float = 0.5,
 ) -> dict[str, Any]:
-    """Decode audio and return bounded, fixed-window chroma feature vectors."""
+    """Decode audio and return bounded beat-aligned chroma windows when beat tracking succeeds."""
     if not payload:
         raise AudioInputError("The uploaded audio file is empty.")
     if not 0.1 <= window_seconds <= 2.0 or not math.isfinite(window_seconds):
@@ -136,6 +295,11 @@ def extract_chroma_features(
     if duration_seconds > MAX_DURATION_SECONDS:
         raise AudioInputError(f"Audio duration exceeds the {int(MAX_DURATION_SECONDS)}-second limit.")
 
+    time_signature_numerator: int | None = None
+    time_signature_denominator: int | None = None
+    meter_confidence: float | None = None
+    bar_duration_seconds: float | None = None
+    downbeat_times_seconds: list[float] = []
     is_silent = float(np.max(np.abs(samples))) <= 1e-8
     if is_silent:
         frame_count = max(1, math.ceil(samples.size / HOP_LENGTH))
@@ -156,7 +320,18 @@ def extract_chroma_features(
             sr=sample_rate,
             hop_length=HOP_LENGTH,
         )
-        if onset_envelope.size == 0 or float(np.max(onset_envelope)) <= 1e-6:
+        onset_peak = float(np.max(onset_envelope)) if onset_envelope.size else 0.0
+        onset_mean = float(np.mean(onset_envelope)) if onset_envelope.size else 0.0
+        # librosa can return a plausible tempo for a perfectly sustained sine because of
+        # spectral/phase fluctuations. Require distinct onset contrast before using beat
+        # timestamps to change chroma frame boundaries.
+        onset_peak_to_mean = onset_peak / max(onset_mean, 1e-9)
+        has_reliable_onsets = (
+            onset_envelope.size > 0
+            and onset_peak > 1e-6
+            and onset_peak_to_mean >= 6.0
+        )
+        if not has_reliable_onsets:
             tempo_bpm = None
             beat_times_seconds = []
         else:
@@ -177,21 +352,65 @@ def extract_chroma_features(
                 if 0 <= float(value) <= duration_seconds
             ]
             tempo_bpm = round(estimate, 2) if math.isfinite(estimate) and estimate > 0 and beat_times_seconds else None
+
+            beat_strengths: list[float] = []
+            for frame in beat_frames:
+                center = int(frame)
+                left = max(0, center - 1)
+                right = min(onset_envelope.size, center + 2)
+                beat_strengths.append(float(np.max(onset_envelope[left:right])) if right > left else 0.0)
+            numerator, confidence, downbeat_phase = infer_meter_from_beat_strengths(beat_strengths)
+            if numerator is not None and downbeat_phase is not None:
+                time_signature_numerator = numerator
+                time_signature_denominator = 4
+                meter_confidence = confidence
+                measured_beat_period = float(np.median(np.diff(beat_times_seconds)))
+                if math.isfinite(measured_beat_period) and measured_beat_period > 0:
+                    bar_duration_seconds = round(measured_beat_period * numerator, 4)
+                downbeat_times_seconds = beat_times_seconds[downbeat_phase::numerator]
+
+                # Beat trackers can omit the very first one or two pulses, shifting the
+                # first reported downbeat by part of a bar. Backfill earlier bar starts
+                # from the first detected downbeat so the initial frames aren't oversized.
+                if len(beat_times_seconds) >= 2 and downbeat_times_seconds:
+                    beat_period = float(np.median(np.diff(beat_times_seconds)))
+                    bar_duration = beat_period * numerator
+                    if math.isfinite(beat_period) and beat_period > 0:
+                        previous_downbeats: list[float] = []
+                        candidate_downbeat = downbeat_times_seconds[0] - bar_duration
+                        while candidate_downbeat >= 0:
+                            previous_downbeats.insert(0, round(candidate_downbeat, 4))
+                            candidate_downbeat -= bar_duration
+                        if previous_downbeats:
+                            downbeat_times_seconds = previous_downbeats + downbeat_times_seconds
+                            original_beats = list(beat_times_seconds)
+                            estimated_beats: list[float] = []
+                            candidate_beat = previous_downbeats[0]
+                            while candidate_beat < original_beats[0]:
+                                nearest_distance = min(abs(candidate_beat - beat) for beat in original_beats)
+                                if nearest_distance > max(0.08, beat_period * 0.2):
+                                    estimated_beats.append(round(candidate_beat, 4))
+                                candidate_beat += beat_period
+                            beat_times_seconds = sorted(set(estimated_beats + original_beats))
+    analysis_intervals, windowing_mode = build_analysis_intervals(
+        duration_seconds,
+        window_seconds,
+        beat_times_seconds,
+        time_signature_numerator,
+        downbeat_times_seconds,
+    )
     frame_times = librosa.frames_to_time(
         np.arange(chroma.shape[1]),
         sr=sample_rate,
         hop_length=HOP_LENGTH,
     )
 
-    # Never return per-hop data directly: fixed windows keep API responses manageable
-    # and align with the TypeScript ChromaFrame contract.
-    window_count = max(1, math.ceil(duration_seconds / window_seconds))
+    # Raw STFT hops are aggregated into either beat-aligned windows or fixed fallback windows.
+    # This bounds the response while avoiding arbitrary one-second cuts when beat tracking succeeds.
     frames: list[dict[str, Any]] = []
     safe_filename = filename.replace("\\", "/").rsplit("/", maxsplit=1)[-1] or "audio-upload"
 
-    for window_index in range(window_count):
-        start_seconds = window_index * window_seconds
-        end_seconds = min(duration_seconds, (window_index + 1) * window_seconds)
+    for start_seconds, end_seconds in analysis_intervals:
         selected = np.flatnonzero((frame_times >= start_seconds) & (frame_times < end_seconds))
         if selected.size == 0:
             center_seconds = (start_seconds + end_seconds) / 2
@@ -222,9 +441,15 @@ def extract_chroma_features(
         "durationSeconds": round(duration_seconds, 4),
         "sampleRate": int(sample_rate),
         "windowSeconds": window_seconds,
+        "windowingMode": windowing_mode,
         "rhythm": {
             "tempoBpm": tempo_bpm,
             "beatTimesSeconds": beat_times_seconds,
+            "timeSignatureNumerator": time_signature_numerator,
+            "timeSignatureDenominator": time_signature_denominator,
+            "meterConfidence": meter_confidence,
+            "barDurationSeconds": bar_duration_seconds,
+            "downbeatTimesSeconds": downbeat_times_seconds,
         },
         "frames": frames,
     }

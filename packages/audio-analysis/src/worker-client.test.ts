@@ -34,10 +34,40 @@ describe("audio worker HTTP client", () => {
     expect(result.frames[0]!.chroma[0]).toBe(1);
     expect(result.rhythm.tempoBpm).toBe(120);
     expect(result.rhythm.beatTimesSeconds).toEqual([0, 0.5]);
+    expect(result.windowingMode).toBe("fixed-window");
     expect(result.frames[0]!.bassPitchClass).toBe(9);
     const requestInit = mockFetch.mock.calls[0]![1];
     expect(requestInit?.method).toBe("POST");
     expect(requestInit?.body).toBeInstanceOf(FormData);
+  });
+
+  it("validates and preserves the meter/downbeat fields from the worker", async () => {
+    const base = workerPayload();
+    const payload = {
+      ...base,
+      windowingMode: "beat-aligned",
+      rhythm: {
+        ...base.rhythm,
+        timeSignatureNumerator: 3,
+        timeSignatureDenominator: 4,
+        meterConfidence: 0.81,
+        barDurationSeconds: 1.5,
+        downbeatTimesSeconds: [0],
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })));
+    const result = await extractAudioFeatures(new Blob(["audio"]), {
+      baseUrl: "http://127.0.0.1:8010",
+      filename: "song.wav",
+    });
+    expect(result.windowingMode).toBe("beat-aligned");
+    expect(result.rhythm).toMatchObject({
+      timeSignatureNumerator: 3,
+      timeSignatureDenominator: 4,
+      meterConfidence: 0.81,
+      barDurationSeconds: 1.5,
+      downbeatTimesSeconds: [0],
+    });
   });
 
   it("propagates structured worker errors", async () => {

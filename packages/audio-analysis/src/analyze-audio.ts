@@ -23,9 +23,18 @@ export async function analyzeAudioForChords(
 ): Promise<AnalyzeAudioForChordsResult> {
   const features = await extractAudioFeatures(audio, options);
   const chordAnalysis = analyzeChromaProgression(features.frames, options.chordAnalysis);
+  const meterKnown = features.rhythm.timeSignatureNumerator != null
+    && features.rhythm.timeSignatureDenominator === 4;
   const chordSheet = buildChordSheet(chordAnalysis.frameResults, {
     beatTimesSeconds: features.rhythm.beatTimesSeconds,
     tempoBpm: features.rhythm.tempoBpm,
+    // The audio-analysis path must not silently assume 4/4 when meter is unknown.
+    beatsPerBar: meterKnown ? features.rhythm.timeSignatureNumerator! : null,
+    timeSignatureNumerator: features.rhythm.timeSignatureNumerator ?? null,
+    timeSignatureDenominator: features.rhythm.timeSignatureDenominator ?? null,
+    meterConfidence: features.rhythm.meterConfidence ?? null,
+    barDurationSeconds: features.rhythm.barDurationSeconds ?? null,
+    downbeatTimesSeconds: features.rhythm.downbeatTimesSeconds ?? [],
   });
   const { frames: _frames, ...metadata } = features;
   return { audio: metadata, chordAnalysis, chordSheet };
