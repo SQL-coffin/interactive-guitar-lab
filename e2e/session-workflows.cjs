@@ -63,7 +63,8 @@ const shows = (l, t = 10000) => l.first().waitFor({ timeout: t }).then(() => tru
   await slots.first().waitFor();
   const n = await slots.count();
   ok('builder shows every extracted chord as detected', n === chipLabels.length && (await page.locator('li[data-origin="detected"]').count()) === n, `${n} chords`);
-  const detected2 = (await slots.nth(1).getAttribute('aria-label')).split(': ')[1].split(',')[0];
+  // Taken from the analysis chips: the slot's own label shows a placeholder until its chord data loads.
+  const detected2 = chipLabels[1].split(': ')[1].split(',')[0].replace(/♯/g, '#');
   await slots.nth(1).getByLabel('Chord 2 Root').selectOption('D#');
   await slots.nth(1).getByLabel('Chord 2 Quality').selectOption('minor7');
   ok('correction is marked as edited and keeps the detected chord', await shows(page.getByText(`Edited · detected ${detected2.replace('#', '♯')}`)), detected2);
