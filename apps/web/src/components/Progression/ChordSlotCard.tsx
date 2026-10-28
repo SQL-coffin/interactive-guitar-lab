@@ -1,4 +1,9 @@
+import { useState } from "react";
+import Link from "next/link";
 import type { ChordQuality } from "@/services";
+import { formatSeconds } from "@/lib/audioTimeline";
+import { isCorrected } from "@/state/lab/model";
+import { ChordDiagram } from "@/components/Voicings/ChordDiagram";
 import { degreeFamily } from "@/lib/degrees";
 import { displaySpelling } from "@/lib/roots";
 import { qualityLabel } from "@/lib/qualities";
@@ -16,10 +21,19 @@ interface ChordSlotCardProps {
   onChange: (patch: Partial<Pick<ProgressionSlot, "root" | "quality">>) => void;
   onMove: (offset: -1 | 1) => void;
   onRemove: () => void;
+  onRevert?: () => void;
+  onShowInAnalysis?: () => void;
+  /** False when the source analysis has been deleted. */
+  sourceAvailable?: boolean;
 }
 
 /** One chord in the progression; its identity comes from GET /api/chords. */
-export function ChordSlotCard({ slot, index, total, qualities, onChange, onMove, onRemove }: ChordSlotCardProps) {
+export function ChordSlotCard({
+  slot, index, total, qualities, onChange, onMove, onRemove, onRevert, onShowInAnalysis, sourceAvailable = true,
+}: ChordSlotCardProps) {
+  const [showFingering, setShowFingering] = useState(false);
+  const corrected = isCorrected(slot);
+  const source = slot.source;
   const service = useGuitarLabService();
   const chord = useAsyncResource(`chord:${slot.root}:${slot.quality}`, (signal) =>
     service.getChord({ root: slot.root, quality: slot.quality }, { signal }),
@@ -28,7 +42,11 @@ export function ChordSlotCard({ slot, index, total, qualities, onChange, onMove,
   const position = `Chord ${index + 1} of ${total}`;
 
   return (
-    <li className={styles.slot} aria-label={`${position}: ${data ? data.symbol : `${slot.root} ${slot.quality}`}`}>
+    <li
+      className={styles.slot}
+      data-origin={source ? (corrected ? "corrected" : "detected") : "manual"}
+      aria-label={`${position}: ${data ? data.symbol : `${slot.root} ${slot.quality}`}${corrected ? `, corrected (detected ${source!.detected.symbol})` : source ? ", detected" : ""}`}
+    >
       <div className={styles.slotHeader}>
         <span className={styles.slotIndex}>{index + 1}</span>
         <div className={styles.slotActions}>
@@ -62,6 +80,44 @@ export function ChordSlotCard({ slot, index, total, qualities, onChange, onMove,
       ) : (
         <p className={styles.slotLoading} role="status">Loading…</p>
       )}
+
+      {source ? (
+        <div className={styles.sourceInfo}>
+          <span className={styles.originBadge} data-origin={corrected ? "corrected" : "detected"}>
+            {corrected ? `Edited · detected ${displaySpelling(source.detected.symbol)}` : "Detected"}
+          </span>
+          <span className={styles.sourceTime}>
+            {formatSeconds(source.startSeconds)}–{formatSeconds(source.endSeconds)} · {source.frameIndexes.length} window{source.frameIndexes.length === 1 ? "" : "s"}
+          </span>
+          <div className={styles.sourceActions}>
+            {onShowInAnalysis && sourceAvailable ? (
+              <button type="button" className={styles.textButton} onClick={onShowInAnalysis}>Show in analysis</button>
+            ) : null}
+            <button type="button" className={styles.textButton} aria-expanded={showFingering} onClick={() => setShowFingering((v) => !v)}>
+              {showFingering ? "Hide" : "Detected"} fingering
+            </button>
+            {corrected && onRevert ? (
+              <button type="button" className={styles.textButton} onClick={onRevert}>Revert</button>
+            ) : null}
+          </div>
+          {showFingering ? (
+            <div className={styles.slotDiagram}>
+              <ChordDiagram voicing={source.voicing} labelMode="degree" />
+              <span className={styles.sourceTime}>
+                Fingering chosen by the analysis for {displaySpelling(source.detected.symbol)}
+                {corrected ? "; it does not apply to your correction" : ""}.
+              </span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <Link
+        className={styles.textButton}
+        href={`/?root=${encodeURIComponent(slot.root)}&quality=${encodeURIComponent(slot.quality)}`}
+      >
+        Open in Chord Explorer
+      </Link>
 
       <ChordPicker
         compact

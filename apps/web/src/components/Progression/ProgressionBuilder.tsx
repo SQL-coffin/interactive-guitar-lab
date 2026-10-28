@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useReducer, useState } from "react";
+import { useId, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { ChordQuality } from "@/services";
 import { displaySpelling } from "@/lib/roots";
 import { useGuitarLabService } from "@/state/ServiceContext";
@@ -9,13 +10,14 @@ import { useFretboardData } from "@/state/useFretboardData";
 import type { LabelMode } from "@/state/explorerState";
 import {
   EXAMPLE_PROGRESSION,
-  INITIAL_PROGRESSION_STATE,
+  MAX_OPTIMIZE_SEGMENT,
   MAX_PROGRESSION_LENGTH,
   candidatesPerChord,
-  progressionReducer,
+  optimizeSegment,
   progressionRequestKey,
 } from "@/state/progressionState";
-import { useProgressionOptimizer } from "@/state/useProgressionOptimizer";
+import { useLab } from "@/state/lab/LabSessionProvider";
+import { ProgressionSessionBar } from "./ProgressionSessionBar";
 import { PageIntro } from "@/components/AppShell/PageIntro";
 import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
@@ -34,12 +36,15 @@ const LABEL_MODES: ReadonlyArray<{ value: LabelMode; label: string }> = [
 export function ProgressionBuilder() {
   const service = useGuitarLabService();
   const id = useId();
-  const [state, dispatch] = useReducer(progressionReducer, INITIAL_PROGRESSION_STATE);
+  const router = useRouter();
+  // The progression lives in LabSessionProvider so it survives navigation between pages.
+  const lab = useLab();
+  const { draft: active, dispatchProgression: dispatch, optimizer, focusWindow } = lab;
+  const state = active.progression;
   const [draft, setDraft] = useState<{ root: string; quality: ChordQuality }>({ root: "C", quality: "major" });
   const [labelMode, setLabelMode] = useState<LabelMode>("degree");
   const qualities = useAsyncResource<ChordQuality[]>("qualities", (signal) => service.listChordQualities({ signal }));
   const { fretboard, openStringNames, stringCount } = useFretboardData();
-  const optimizer = useProgressionOptimizer(service);
   const { slots, settings } = state;
   const key = progressionRequestKey(state);
   const qualityList = qualities.status === "success" ? qualities.data : [];
@@ -47,13 +52,16 @@ export function ProgressionBuilder() {
   const opt = optimizer.state;
   const shownRun = opt.status === "success" ? opt.run : opt.status === "loading" ? opt.previous : undefined;
   const setSetting = (patch: Partial<typeof settings>) => dispatch({ type: "setSettings", patch });
-  const effectivePerChord = candidatesPerChord(settings.voicingsPerChord, slots.length);
+  const segment = optimizeSegment(state);
+  const effectivePerChord = candidatesPerChord(settings.voicingsPerChord, segment.slots.length);
 
   return (
     <>
       <PageIntro title="Progression builder">
         Arrange chords, then ask the engine for playable voicing paths that keep hand movement low between shapes.
       </PageIntro>
+
+      <ProgressionSessionBar />
 
       <Panel
         title="Progression"
@@ -93,6 +101,13 @@ export function ProgressionBuilder() {
                     onChange={(patch) => dispatch({ type: "update", id: slot.id, patch })}
                     onMove={(offset) => dispatch({ type: "move", id: slot.id, offset })}
                     onRemove={() => dispatch({ type: "remove", id: slot.id })}
+                    onRevert={() => dispatch({ type: "revert", id: slot.id })}
+                    sourceAvailable={slot.source !== undefined && lab.sessions.some((s) => s.id === slot.source!.sessionId)}
+                    onShowInAnalysis={() => {
+                      if (!slot.source) return;
+                      focusWindow({ sessionId: slot.source.sessionId, frameIndex: slot.source.frameIndexes[0]!, pathIndex: slot.source.pathIndex });
+                      router.push("/audio");
+                    }}
                   />
                 ))}
               </ol>
@@ -139,9 +154,23 @@ export function ProgressionBuilder() {
           aria-label="Voicing path settings"
           onSubmit={(event) => {
             event.preventDefault();
-            void optimizer.run(slots, settings, key);
+            void optimizer.run(segment.slots, settings, key);
           }}
         >
+          {slots.length > MAX_OPTIMIZE_SEGMENT ? (
+            <label htmlFor={`${id}-segment`}>
+              <span>Chords to optimize</span>
+              <select
+                id={`${id}-segment`}
+                value={segment.start}
+                onChange={(e) => setSetting({ segmentStart: Number(e.target.value) })}
+              >
+                {Array.from({ length: slots.length - MAX_OPTIMIZE_SEGMENT + 1 }, (_, start) => (
+                  <option key={start} value={start}>{start + 1}–{start + MAX_OPTIMIZE_SEGMENT} of {slots.length}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label htmlFor={`${id}-per`}>
             <span>Candidates per chord</span>
             <select id={`${id}-per`} value={settings.voicingsPerChord} onChange={(e) => setSetting({ voicingsPerChord: Number(e.target.value) })}>
@@ -174,7 +203,7 @@ export function ProgressionBuilder() {
           </label>
           {effectivePerChord < settings.voicingsPerChord ? (
             <p className={styles.hint} role="note">
-              With {slots.length} chords the optimizer accepts at most {effectivePerChord} candidates per chord, so{" "}
+              With {segment.slots.length} chords the optimizer accepts at most {effectivePerChord} candidates per chord, so{" "}
               {effectivePerChord} will be searched.
             </p>
           ) : null}
@@ -191,7 +220,7 @@ export function ProgressionBuilder() {
         <div className={styles.resultsArea}>
           {opt.status === "loading" ? (
             <LoadingState
-              label={opt.phase === "searching" ? `Searching voicings for ${slots.length} chords…` : "Ranking voicing paths…"}
+              label={opt.phase === "searching" ? `Searching voicings for ${segment.slots.length} chords…` : "Ranking voicing paths…"}
             />
           ) : null}
           {opt.status === "error" ? (

@@ -3,12 +3,16 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { createLocalGuitarLabService, ServiceError, type GuitarLabService } from "@/services";
 import { GuitarLabServiceProvider } from "@/state/ServiceContext";
+import { LabSessionProvider } from "@/state/lab/LabSessionProvider";
+import { createMemoryRepository } from "@/state/lab/repository";
 import { GuitarLab } from "./GuitarLab";
 
 function renderLab(service: GuitarLabService = createLocalGuitarLabService()) {
   render(
     <GuitarLabServiceProvider service={service}>
-      <GuitarLab />
+      <LabSessionProvider repository={createMemoryRepository()}>
+        <GuitarLab />
+      </LabSessionProvider>
     </GuitarLabServiceProvider>,
   );
   return service;

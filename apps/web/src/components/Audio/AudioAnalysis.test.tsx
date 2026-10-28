@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { analyzeChromaProgression } from "@interactive-guitar-lab/audio-analysis";
 import { createLocalGuitarLabService, ServiceError, type AudioAnalysisResponse, type GuitarLabService } from "@/services";
 import { GuitarLabServiceProvider } from "@/state/ServiceContext";
+import { LabSessionProvider } from "@/state/lab/LabSessionProvider";
+import { createMemoryRepository } from "@/state/lab/repository";
 import { AudioAnalysis } from "./AudioAnalysis";
 
 // Fixture produced by the backend's own analysis pipeline from synthetic chroma, so its
@@ -36,7 +38,9 @@ function renderAudio(analyzeAudio: GuitarLabService["analyzeAudio"]) {
   const service = { ...createLocalGuitarLabService(), analyzeAudio };
   render(
     <GuitarLabServiceProvider service={service}>
-      <AudioAnalysis />
+      <LabSessionProvider repository={createMemoryRepository()}>
+        <AudioAnalysis />
+      </LabSessionProvider>
     </GuitarLabServiceProvider>,
   );
 }
