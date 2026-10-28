@@ -8,9 +8,11 @@ import styles from "./Voicings.module.css";
 interface VoicingResultsProps {
   result: AsyncState<VoicingSearchResult>;
   selectedIndex: number | null;
+  compareIndex?: number | null;
   labelMode: LabelMode;
   openStringNames: ReadonlyMap<number, string>;
   onSelect: (index: number | null) => void;
+  onCompare?: (index: number | null) => void;
   onRetry: () => void;
   onResetConstraints: () => void;
 }
@@ -18,9 +20,11 @@ interface VoicingResultsProps {
 export function VoicingResults({
   result,
   selectedIndex,
+  compareIndex = null,
   labelMode,
   openStringNames,
   onSelect,
+  onCompare,
   onRetry,
   onResetConstraints,
 }: VoicingResultsProps) {
@@ -67,9 +71,11 @@ export function VoicingResults({
               voicing={voicing}
               rank={index + 1}
               selected={index === selectedIndex}
+              comparing={index === compareIndex}
               labelMode={labelMode}
               openStringNames={openStringNames}
               onSelect={() => onSelect(index === selectedIndex ? null : index)}
+              onCompare={onCompare && selectedIndex !== null ? () => onCompare(index === compareIndex ? null : index) : undefined}
             />
           </li>
         ))}

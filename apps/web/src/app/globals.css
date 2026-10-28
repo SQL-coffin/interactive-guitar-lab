@@ -146,3 +146,44 @@ button {
 .deg-fifth { --deg: var(--deg-fifth); --deg-fg: var(--deg-ink); }
 .deg-seventh { --deg: var(--deg-seventh); --deg-fg: var(--deg-ink); }
 .deg-other { --deg: var(--deg-other); --deg-fg: var(--deg-ink); }
+
+/* ---------- Page scaffolding ---------- */
+.page {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-5) var(--space-6);
+  display: grid;
+  gap: var(--space-5);
+}
+
+.site-footer {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0 var(--space-5) var(--space-6);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--space-3);
+  top: -48px;
+  z-index: 50;
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+}
+
+.skip-link:focus {
+  top: var(--space-3);
+}
+
+@media (max-width: 560px) {
+  .page {
+    padding: var(--space-4) var(--space-4) var(--space-5);
+    gap: var(--space-4);
+  }
+}

@@ -24,6 +24,8 @@ export interface ExplorerState {
   labelMode: LabelMode;
   /** Index into the current voicing results, or null when none is pinned to the fretboard. */
   selectedVoicing: number | null;
+  /** Second voicing drawn as hollow markers for side-by-side comparison. */
+  compareVoicing: number | null;
 }
 
 export type ExplorerAction =
@@ -33,7 +35,8 @@ export type ExplorerAction =
   | { type: "setConstraint"; patch: Partial<SearchConstraints> }
   | { type: "resetConstraints" }
   | { type: "setLabelMode"; labelMode: LabelMode }
-  | { type: "selectVoicing"; index: number | null };
+  | { type: "selectVoicing"; index: number | null }
+  | { type: "compareVoicing"; index: number | null };
 
 export const DEFAULT_CONSTRAINTS: SearchConstraints = {
   maxFret: 12,
@@ -52,24 +55,39 @@ export const INITIAL_EXPLORER_STATE: ExplorerState = {
   constraints: DEFAULT_CONSTRAINTS,
   labelMode: "degree",
   selectedVoicing: 0,
+  compareVoicing: null,
 };
+
+/** New results invalidate result indexes. */
+const FRESH_RESULTS = { selectedVoicing: 0, compareVoicing: null } as const;
 
 export function explorerReducer(state: ExplorerState, action: ExplorerAction): ExplorerState {
   switch (action.type) {
     case "setRoot":
-      return action.root === state.root ? state : { ...state, root: action.root, selectedVoicing: 0 };
+      return action.root === state.root ? state : { ...state, root: action.root, ...FRESH_RESULTS };
     case "setSpelling":
-      return { ...state, spelling: action.spelling, root: action.root, selectedVoicing: action.root === state.root ? state.selectedVoicing : 0 };
+      return action.root === state.root
+        ? { ...state, spelling: action.spelling }
+        : { ...state, spelling: action.spelling, root: action.root, ...FRESH_RESULTS };
     case "setQuality":
-      return action.quality === state.quality ? state : { ...state, quality: action.quality, selectedVoicing: 0 };
+      return action.quality === state.quality ? state : { ...state, quality: action.quality, ...FRESH_RESULTS };
     case "setConstraint":
-      return { ...state, constraints: { ...state.constraints, ...action.patch }, selectedVoicing: 0 };
+      return { ...state, constraints: { ...state.constraints, ...action.patch }, ...FRESH_RESULTS };
     case "resetConstraints":
-      return { ...state, constraints: DEFAULT_CONSTRAINTS, selectedVoicing: 0 };
+      return { ...state, constraints: DEFAULT_CONSTRAINTS, ...FRESH_RESULTS };
     case "setLabelMode":
       return { ...state, labelMode: action.labelMode };
     case "selectVoicing":
-      return { ...state, selectedVoicing: action.index };
+      return {
+        ...state,
+        selectedVoicing: action.index,
+        compareVoicing: action.index !== null && action.index === state.compareVoicing ? null : state.compareVoicing,
+      };
+    case "compareVoicing":
+      return {
+        ...state,
+        compareVoicing: action.index !== null && action.index === state.selectedVoicing ? null : action.index,
+      };
   }
 }
 
