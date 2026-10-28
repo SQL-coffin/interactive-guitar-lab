@@ -1,0 +1,250 @@
+.score {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.scoreTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.header {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+}
+
+.header dt {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.header dd {
+  margin: 2px 0 0;
+  font-weight: 650;
+}
+
+.keyLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.keyLabel select,
+.controls select {
+  min-height: 32px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 0 var(--space-2);
+}
+
+.saveBox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.unsaved {
+  color: var(--accent);
+}
+
+.notices {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.lanesKey {
+  display: flex;
+  gap: var(--space-4);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.bars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  overflow-x: auto;
+}
+
+.bars:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.bars :global(.jianpu-bar) {
+  max-width: 100%;
+  height: auto;
+  flex-shrink: 0;
+}
+
+.bars :global(.jianpu-bar[data-irregular="true"]) {
+  background: repeating-linear-gradient(135deg, transparent 0 8px, color-mix(in srgb, var(--border) 40%, transparent) 8px 9px);
+}
+
+.bars :global(.jianpu-chord),
+.bars :global(.jianpu-note),
+.bars :global(.jianpu-slot) {
+  cursor: pointer;
+}
+
+.bars :global(.jianpu-chord:focus-visible),
+.bars :global(.jianpu-note:focus-visible) {
+  outline: 2px solid var(--focus);
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.editor {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+}
+
+.panelTitle {
+  font-size: 0.9rem;
+}
+
+.keypad {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.key {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.key:hover {
+  border-color: var(--accent);
+}
+
+.controls {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.controls label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  max-width: 220px;
+}
+
+.toggleRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.toggle {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.toggle[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.chordName {
+  font-size: 1.3rem;
+  font-weight: 750;
+}
+
+.facts {
+  margin: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 0.82rem;
+}
+
+.facts div {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+}
+
+.facts dt {
+  color: var(--text-muted);
+}
+
+.facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.timelineRow {
+  width: 100%;
+  height: auto;
+}
+
+@media (max-width: 900px) {
+  .panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.scoreTitle {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}

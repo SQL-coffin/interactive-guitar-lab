@@ -64,7 +64,8 @@ export function formatSeconds(seconds: number): string {
   const whole = Math.floor(seconds);
   const minutes = Math.floor(whole / 60);
   const rest = whole % 60;
-  const tenths = Math.floor((seconds - whole) * 10);
+  // The epsilon keeps binary rounding from showing 2.3 s as 2.2 (2.3 − 2 = 0.2999…).
+  const tenths = Math.min(9, Math.floor((seconds - whole) * 10 + 1e-6));
   return `${minutes}:${String(rest).padStart(2, "0")}.${tenths}`;
 }
 

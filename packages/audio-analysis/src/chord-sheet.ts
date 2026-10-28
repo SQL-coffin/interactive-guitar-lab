@@ -8,9 +8,16 @@ export interface ChordSheetOptions {
   beatTimesSeconds?: readonly number[];
   /** Estimated tempo, used only as a fallback when beat timestamps are absent. */
   tempoBpm?: number | null;
-  /** Beats per bar; defaults to 4. */
-  beatsPerBar?: number;
-  /** First beat's bar number; defaults to 1. */
+  /** Beats per bar; defaults to 4 for direct/legacy callers, null when meter is unknown. */
+  beatsPerBar?: number | null;
+  timeSignatureNumerator?: number | null;
+  timeSignatureDenominator?: number | null;
+  meterConfidence?: number | null;
+  /** Measured bar duration in seconds; null when meter is unknown. */
+  barDurationSeconds?: number | null;
+  /** Estimated downbeat timestamps; empty when meter is unknown. */
+  downbeatTimesSeconds?: readonly number[];
+  /** First bar number, if the downbeat grid is known. Defaults to 1. */
   firstBarNumber?: number;
 }
 
@@ -32,16 +39,24 @@ export interface ChordSheetEvent {
 }
 
 export interface ChordSheetResult {
-  schemaVersion: "1.1";
+  schemaVersion: "1.2";
   events: ChordSheetEvent[];
   /** Non-destructive review suggestions; raw chord events remain unchanged. */
   refinementSuggestions: ChordSheetRefinementSuggestion[];
   sourceWindowCount: number;
   skippedWindowIndexes: number[];
   rhythm: {
-    beatsPerBar: number;
+    /** Null when the meter detector cannot distinguish a reliable bar grouping. */
+    beatsPerBar: number | null;
     beatTimesSeconds: number[];
+    downbeatTimesSeconds: number[];
     tempoBpm: number | null;
+    timeSignatureNumerator: number | null;
+    timeSignatureDenominator: number | null;
+    /** Heuristic meter separation score, not a calibrated probability. */
+    meterConfidence: number | null;
+    /** Measured duration of one bar in seconds; null when meter is unknown. */
+    barDurationSeconds: number | null;
     timingSource: "beat-detection" | "tempo-estimate" | "unavailable";
   };
 }
@@ -55,16 +70,37 @@ export function buildChordSheet(
   input: ChordSheetOptions = {},
 ): ChordSheetResult {
   const tolerance = input.continuityToleranceSeconds ?? DEFAULT_CONTINUITY_TOLERANCE_SECONDS;
-  const beatsPerBar = input.beatsPerBar ?? 4;
+  const beatsPerBar = input.beatsPerBar === undefined ? 4 : input.beatsPerBar;
   const firstBarNumber = input.firstBarNumber ?? 1;
+  const timeSignatureNumerator = input.timeSignatureNumerator ?? null;
+  const timeSignatureDenominator = input.timeSignatureDenominator ?? null;
+  const meterConfidence = input.meterConfidence ?? null;
+  const downbeatTimesSeconds = [...(input.downbeatTimesSeconds ?? [])];
   if (!Number.isFinite(tolerance) || tolerance < 0 || tolerance > 0.25) {
     throw new RangeError("continuityToleranceSeconds must be between 0 and 0.25.");
   }
-  if (!Number.isInteger(beatsPerBar) || beatsPerBar < 1 || beatsPerBar > 12) {
-    throw new RangeError("beatsPerBar must be an integer from 1 to 12.");
+  if (beatsPerBar !== null && (!Number.isInteger(beatsPerBar) || beatsPerBar < 1 || beatsPerBar > 12)) {
+    throw new RangeError("beatsPerBar must be null or an integer from 1 to 12.");
   }
   if (!Number.isInteger(firstBarNumber) || firstBarNumber < 1) {
     throw new RangeError("firstBarNumber must be a positive integer.");
+  }
+  if ((timeSignatureNumerator === null) !== (timeSignatureDenominator === null)) {
+    throw new RangeError("Time signature numerator and denominator must both be known or both be null.");
+  }
+  if (timeSignatureNumerator !== null
+      && (!Number.isInteger(timeSignatureNumerator) || timeSignatureNumerator < 1 || timeSignatureNumerator > 12)) {
+    throw new RangeError("timeSignatureNumerator must be an integer from 1 to 12 or null.");
+  }
+  if (timeSignatureDenominator !== null && ![2, 4, 8, 16].includes(timeSignatureDenominator)) {
+    throw new RangeError("timeSignatureDenominator must be 2, 4, 8, 16 or null.");
+  }
+  if (meterConfidence !== null && (!Number.isFinite(meterConfidence) || meterConfidence < 0 || meterConfidence > 1)) {
+    throw new RangeError("meterConfidence must be between 0 and 1 or null.");
+  }
+  if (input.barDurationSeconds != null
+      && (!Number.isFinite(input.barDurationSeconds) || input.barDurationSeconds <= 0)) {
+    throw new RangeError("barDurationSeconds must be positive and finite or null.");
   }
 
   const suppliedBeats = input.beatTimesSeconds ?? [];
@@ -72,10 +108,19 @@ export function buildChordSheet(
       || suppliedBeats.some((beat, i) => i > 0 && beat <= suppliedBeats[i - 1]!)) {
     throw new RangeError("beatTimesSeconds must be finite, non-negative, and strictly increasing.");
   }
+  if (downbeatTimesSeconds.some((beat) => !Number.isFinite(beat) || beat < 0)
+      || downbeatTimesSeconds.some((beat, i) => i > 0 && beat <= downbeatTimesSeconds[i - 1]!)) {
+    throw new RangeError("downbeatTimesSeconds must be finite, non-negative, and strictly increasing.");
+  }
+  if ((timeSignatureNumerator !== null) !== (downbeatTimesSeconds.length > 0)) {
+    throw new RangeError("A known time signature must include downbeats, and unknown meter must not include them.");
+  }
   const tempoBpm = input.tempoBpm ?? null;
   if (tempoBpm !== null && (!Number.isFinite(tempoBpm) || tempoBpm <= 0)) {
     throw new RangeError("tempoBpm must be a positive finite number or null.");
   }
+  const barDurationSeconds = input.barDurationSeconds
+    ?? (tempoBpm !== null && beatsPerBar !== null ? (60 / tempoBpm) * beatsPerBar : null);
 
   let timingSource: ChordSheetResult["rhythm"]["timingSource"] = "unavailable";
   let beatTimesSeconds = [...suppliedBeats];
@@ -140,39 +185,91 @@ export function buildChordSheet(
     });
   });
 
+  const nearestBeat = (time: number): number => {
+    let bestIndex = 0;
+    let bestDistance = Infinity;
+    for (let i = 0; i < beatTimesSeconds.length; i += 1) {
+      const distance = Math.abs(beatTimesSeconds[i]! - time);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = i;
+      }
+    }
+    return bestDistance <= BEAT_MATCH_TOLERANCE_SECONDS ? bestIndex : -1;
+  };
+  const nearestDownbeat = (time: number): number => {
+    let bestIndex = -1;
+    let bestDistance = Infinity;
+    for (let i = 0; i < downbeatTimesSeconds.length; i += 1) {
+      const distance = Math.abs(downbeatTimesSeconds[i]! - time);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = i;
+      }
+    }
+    return bestDistance <= BEAT_MATCH_TOLERANCE_SECONDS ? bestIndex : -1;
+  };
+  const downbeatBeatIndexes = downbeatTimesSeconds
+    .map((time) => nearestBeat(time))
+    .filter((index) => index >= 0);
+
   for (const event of events) {
     if (beatTimesSeconds.length === 0) continue;
-    const nearestBeat = (time: number): number => {
-      let bestIndex = 0;
-      let bestDistance = Infinity;
-      for (let i = 0; i < beatTimesSeconds.length; i += 1) {
-        const distance = Math.abs(beatTimesSeconds[i]! - time);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestIndex = i;
-        }
-      }
-      return bestDistance <= BEAT_MATCH_TOLERANCE_SECONDS ? bestIndex : -1;
-    };
     const startBeatIndex = nearestBeat(event.startSeconds);
     const endBeatIndex = nearestBeat(event.endSeconds);
     if (startBeatIndex >= 0) {
       event.startBeat = startBeatIndex + 1;
-      event.startBar = firstBarNumber + Math.floor(startBeatIndex / beatsPerBar);
-      event.beatInBar = startBeatIndex % beatsPerBar;
+      if (beatsPerBar !== null) {
+        if (downbeatTimesSeconds.length > 0) {
+          const downbeatIndex = downbeatTimesSeconds.reduce((latest, time, index) =>
+            time <= event.startSeconds + BEAT_MATCH_TOLERANCE_SECONDS ? index : latest, -1);
+          if (downbeatIndex >= 0) {
+            event.startBar = firstBarNumber + downbeatIndex;
+            const barStartBeatIndex = downbeatBeatIndexes[downbeatIndex] ?? -1;
+            if (barStartBeatIndex >= 0) {
+              event.beatInBar = ((startBeatIndex - barStartBeatIndex) % beatsPerBar + beatsPerBar) % beatsPerBar;
+            }
+          }
+        } else {
+          // Compatibility path for direct callers with a manually supplied meter.
+          event.startBar = firstBarNumber + Math.floor(startBeatIndex / beatsPerBar);
+          event.beatInBar = startBeatIndex % beatsPerBar;
+        }
+      }
     }
     if (endBeatIndex >= 0) {
       event.endBeat = endBeatIndex + 1;
-      event.endBar = firstBarNumber + Math.floor(endBeatIndex / beatsPerBar);
+      if (beatsPerBar !== null) {
+        const downbeatIndex = nearestDownbeat(event.endSeconds);
+        if (downbeatIndex >= 0) {
+          event.endBar = firstBarNumber + downbeatIndex;
+        } else if (downbeatTimesSeconds.length === 0) {
+          event.endBar = firstBarNumber + Math.floor(endBeatIndex / beatsPerBar);
+        } else {
+          const previousDownbeatIndex = downbeatTimesSeconds.reduce((latest, time, index) =>
+            time < event.endSeconds ? index : latest, -1);
+          if (previousDownbeatIndex >= 0) event.endBar = firstBarNumber + previousDownbeatIndex;
+        }
+      }
     }
   }
 
   return {
-    schemaVersion: "1.1",
+    schemaVersion: "1.2",
     events,
     refinementSuggestions: suggestChordSheetRefinements(events),
     sourceWindowCount: frameResults.length,
     skippedWindowIndexes,
-    rhythm: { beatsPerBar, beatTimesSeconds, tempoBpm, timingSource },
+    rhythm: {
+      beatsPerBar,
+      beatTimesSeconds,
+      downbeatTimesSeconds,
+      tempoBpm,
+      timeSignatureNumerator,
+      timeSignatureDenominator,
+      meterConfidence,
+      barDurationSeconds,
+      timingSource,
+    },
   };
 }

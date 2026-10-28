@@ -15,10 +15,21 @@ export interface AudioFeatureResponse {
   filename: string;
   durationSeconds: number;
   sampleRate: number;
+  /** Target duration requested by the client; individual frame durations may follow the beat grid. */
   windowSeconds: number;
+  windowingMode: "beat-aligned" | "fixed-window";
   rhythm: {
     tempoBpm: number | null;
     beatTimesSeconds: number[];
+    /** Conservative estimate, currently limited to 3/4 and 4/4. Null means uncertain/unsupported. */
+    timeSignatureNumerator: number | null;
+    timeSignatureDenominator: number | null;
+    /** Heuristic separation score, not a calibrated probability. */
+    meterConfidence: number | null;
+    /** Estimated duration of one bar, derived from the observed beat period and meter. */
+    barDurationSeconds: number | null;
+    /** Estimated downbeat timestamps; empty when meter is uncertain. */
+    downbeatTimesSeconds: number[];
   };
   frames: ChromaFrame[];
 }
@@ -42,18 +53,38 @@ function parseFeatureResponse(value: unknown): AudioFeatureResponse {
       || !isRecord(value.rhythm)) {
     throw new AudioWorkerError("Audio worker returned an unsupported feature response.", null);
   }
+  const windowingMode = value.windowingMode ?? "fixed-window";
   if (typeof value.filename !== "string"
       || typeof value.durationSeconds !== "number" || !Number.isFinite(value.durationSeconds)
       || typeof value.sampleRate !== "number" || !Number.isInteger(value.sampleRate)
-      || typeof value.windowSeconds !== "number" || !Number.isFinite(value.windowSeconds)) {
+      || typeof value.windowSeconds !== "number" || !Number.isFinite(value.windowSeconds)
+      || (windowingMode !== "beat-aligned" && windowingMode !== "fixed-window")) {
     throw new AudioWorkerError("Audio worker returned invalid audio metadata.", null);
   }
 
   const tempoBpm = value.rhythm.tempoBpm;
   const beatTimesSeconds = value.rhythm.beatTimesSeconds;
+  const numerator = value.rhythm.timeSignatureNumerator;
+  const denominator = value.rhythm.timeSignatureDenominator;
+  const meterConfidence = value.rhythm.meterConfidence ?? null;
+  const barDurationSeconds = value.rhythm.barDurationSeconds ?? null;
+  const downbeatTimesSeconds = value.rhythm.downbeatTimesSeconds ?? [];
   if ((tempoBpm !== null && (typeof tempoBpm !== "number" || !Number.isFinite(tempoBpm) || tempoBpm <= 0))
       || !Array.isArray(beatTimesSeconds)
-      || beatTimesSeconds.some((beat) => typeof beat !== "number" || !Number.isFinite(beat) || beat < 0)) {
+      || beatTimesSeconds.some((beat) => typeof beat !== "number" || !Number.isFinite(beat) || beat < 0)
+      || (numerator !== undefined && numerator !== null
+        && (typeof numerator !== "number" || !Number.isInteger(numerator) || numerator < 1 || numerator > 12))
+      || (denominator !== undefined && denominator !== null
+        && (typeof denominator !== "number" || ![2, 4, 8, 16].includes(denominator)))
+      || (meterConfidence !== null
+        && (typeof meterConfidence !== "number" || !Number.isFinite(meterConfidence) || meterConfidence < 0 || meterConfidence > 1))
+      || (barDurationSeconds !== null
+        && (typeof barDurationSeconds !== "number" || !Number.isFinite(barDurationSeconds) || barDurationSeconds <= 0))
+      || !Array.isArray(downbeatTimesSeconds)
+      || downbeatTimesSeconds.some((beat) => typeof beat !== "number" || !Number.isFinite(beat) || beat < 0)
+      || (numerator != null) !== (denominator != null)
+      || (barDurationSeconds !== null && numerator == null)
+      || (numerator != null && (typeof meterConfidence !== "number" || downbeatTimesSeconds.length === 0))) {
     throw new AudioWorkerError("Audio worker returned invalid rhythm data.", null);
   }
 
@@ -87,9 +118,15 @@ function parseFeatureResponse(value: unknown): AudioFeatureResponse {
     durationSeconds: value.durationSeconds,
     sampleRate: value.sampleRate,
     windowSeconds: value.windowSeconds,
+    windowingMode,
     rhythm: {
       tempoBpm,
       beatTimesSeconds: beatTimesSeconds as number[],
+      timeSignatureNumerator: numerator == null ? null : numerator as number,
+      timeSignatureDenominator: denominator == null ? null : denominator as number,
+      meterConfidence: meterConfidence == null ? null : meterConfidence as number,
+      barDurationSeconds: barDurationSeconds == null ? null : barDurationSeconds as number,
+      downbeatTimesSeconds: downbeatTimesSeconds as number[],
     },
     frames,
   };

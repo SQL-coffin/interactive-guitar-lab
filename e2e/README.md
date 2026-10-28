@@ -51,6 +51,11 @@ node e2e/browser-workflows.cjs e2e/fixtures/out/pop-I-V-vi-IV-C.wav http://local
 node e2e/session-workflows.cjs e2e/fixtures/out/pop-I-V-vi-IV-C.wav http://localhost:3000
 ```
 
+```bash
+# Jianpu score view: meter, bars from downbeats (or the time-based fallback), melody edit → save → reload
+node e2e/score-workflows.cjs e2e/fixtures/out/pop-I-V-vi-IV-C.wav http://localhost:3000
+```
+
 `audio-accuracy.mjs` reports accuracy misses without failing, and exits non-zero only if the
 service fails. Set `CHORD_CONFIDENCE_WEIGHT` to compare optimizer weights through the existing API option.
 

@@ -50,6 +50,7 @@ describe("audio timeline", () => {
   it("formats times and sizes", () => {
     expect(formatSeconds(0)).toBe("0:00.0");
     expect(formatSeconds(83.45)).toBe("1:23.4");
+    expect(formatSeconds(2.3)).toBe("0:02.3"); // not 0:02.2 from floating-point error
     expect(formatSeconds(Number.NaN)).toBe("–:––");
     expect(formatBytes(512)).toBe("512 B");
     expect(formatBytes(25 * 1024 * 1024)).toBe("25.0 MB");

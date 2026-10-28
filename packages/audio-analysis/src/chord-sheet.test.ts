@@ -97,6 +97,49 @@ describe("buildChordSheet", () => {
     expect(result.events[4]).toMatchObject({ startBeat: 5, startBar: 2, beatInBar: 0 });
   });
 
+  it("uses the detected 3/4 downbeat grid instead of assuming a four-beat bar", () => {
+    const result = buildChordSheet([
+      windowResult(0, 0.5, "C"),
+      windowResult(0.5, 1, "G"),
+      windowResult(1, 1.5, "Am"),
+      windowResult(1.5, 2, "F"),
+      windowResult(2, 2.5, "C"),
+    ], {
+      beatTimesSeconds: [0, 0.5, 1, 1.5, 2, 2.5],
+      tempoBpm: 120,
+      beatsPerBar: 3,
+      timeSignatureNumerator: 3,
+      timeSignatureDenominator: 4,
+      meterConfidence: 0.82,
+      downbeatTimesSeconds: [0, 1.5],
+    });
+    expect(result.schemaVersion).toBe("1.2");
+    expect(result.rhythm).toMatchObject({
+      beatsPerBar: 3,
+      timeSignatureNumerator: 3,
+      timeSignatureDenominator: 4,
+      meterConfidence: 0.82,
+      barDurationSeconds: 1.5,
+      downbeatTimesSeconds: [0, 1.5],
+    });
+    expect(result.events[3]).toMatchObject({ startBeat: 4, startBar: 2, beatInBar: 0 });
+  });
+
+  it("keeps bar positions unknown when the meter is uncertain", () => {
+    const result = buildChordSheet([windowResult(0, 0.5, "C"), windowResult(0.5, 1, "G")], {
+      beatTimesSeconds: [0, 0.5, 1],
+      beatsPerBar: null,
+      timeSignatureNumerator: null,
+      timeSignatureDenominator: null,
+      meterConfidence: null,
+      barDurationSeconds: null,
+      downbeatTimesSeconds: [],
+    });
+    expect(result.rhythm.beatsPerBar).toBeNull();
+    expect(result.rhythm.barDurationSeconds).toBeNull();
+    expect(result.events[0]).toMatchObject({ startBeat: 1, startBar: null, beatInBar: null });
+  });
+
   it("uses tempo only as a fallback and leaves beat positions unknown without rhythm data", () => {
     const frames = [windowResult(0, 0.5, "C"), windowResult(0.5, 1, "G")];
     const fallback = buildChordSheet(frames, { tempoBpm: 120 });
@@ -111,7 +154,7 @@ describe("buildChordSheet", () => {
 
   it("validates rhythm and meter input", () => {
     expect(buildChordSheet([])).toMatchObject({
-      schemaVersion: "1.1",
+      schemaVersion: "1.2",
       events: [],
       refinementSuggestions: [],
       sourceWindowCount: 0,

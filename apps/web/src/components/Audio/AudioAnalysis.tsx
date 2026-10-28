@@ -17,9 +17,16 @@ import { AudioTimeline } from "./AudioTimeline";
 import { SegmentInspector } from "./SegmentInspector";
 import { RecentAnalyses } from "./RecentAnalyses";
 import { SessionProgression } from "./SessionProgression";
+import { ScoreView } from "@/components/Score/ScoreView";
+import { readMeter, timeSignatureLabel } from "@/lib/score/meter";
 import styles from "./Audio.module.css";
 
 const WINDOW_CHOICES = [0.5, 1, 2] as const;
+const VIEWS = [
+  { value: "analysis", label: "Chord analysis" },
+  { value: "score", label: "Score · 简谱" },
+] as const;
+type View = (typeof VIEWS)[number]["value"];
 const LABEL_MODES: ReadonlyArray<{ value: LabelMode; label: string }> = [
   { value: "degree", label: "Degrees" },
   { value: "note", label: "Notes" },
@@ -47,6 +54,7 @@ export function AudioAnalysis() {
   const [selectedFrame, setSelectedFrame] = useState<number | null>(null);
   const [pathIndex, setPathIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [view, setView] = useState<View>("analysis");
   const audioRef = useRef<HTMLAudioElement>(null);
 
   // Playback uses the in-memory file for this session only; audio is never stored.
@@ -70,6 +78,7 @@ export function AudioAnalysis() {
     [result],
   );
   const pathSymbols = useMemo(() => pathSymbolsByFrame(segments, path), [segments, path]);
+  const meter = useMemo(() => (result ? readMeter(result) : null), [result]);
   const selected = selectedFrame !== null ? segments[selectedFrame] : undefined;
   const selectedStep = selected?.stepIndex != null ? path?.steps[selected.stepIndex] : undefined;
   const previousStep = selected?.stepIndex != null && selected.stepIndex > 0 ? path?.steps[selected.stepIndex - 1] : undefined;
@@ -218,7 +227,22 @@ export function AudioAnalysis() {
                 <dd>{result.audio.rhythm.tempoBpm === null ? "No stable estimate" : `≈ ${result.audio.rhythm.tempoBpm.toFixed(1)} BPM`}</dd>
               </div>
               <div><dt>Beats detected</dt><dd>{result.audio.rhythm.beatTimesSeconds.length}</dd></div>
-              <div><dt>Windows</dt><dd>{segments.length} × {result.audio.windowSeconds} s</dd></div>
+              {meter ? (
+                <>
+                  <div><dt>Time signature</dt><dd>{timeSignatureLabel(meter)}</dd></div>
+                  <div><dt>Bar length</dt><dd>{meter.barDurationSeconds === null ? "—" : `${meter.barDurationSeconds.toFixed(2)} s`}</dd></div>
+                  <div><dt>Meter confidence</dt><dd>{meter.confidence === null ? "—" : `${meter.confidence.toFixed(2)} (heuristic)`}</dd></div>
+                  <div>
+                    <dt>Windows</dt>
+                    <dd>
+                      {segments.length}
+                      {meter.windowingMode === "beat-aligned"
+                        ? ` (beat-aligned, target ${result.audio.windowSeconds} s)`
+                        : ` × ${result.audio.windowSeconds} s`}
+                    </dd>
+                  </div>
+                </>
+              ) : null}
               <div><dt>Silent windows</dt><dd>{result.chordAnalysis.skippedSilentFrameIndexes.length}</dd></div>
               <div><dt>Sample rate</dt><dd>{result.audio.sampleRate.toLocaleString()} Hz</dd></div>
             </dl>
@@ -228,6 +252,20 @@ export function AudioAnalysis() {
             </p>
           </Panel>
 
+          <div className={styles.viewSwitch}>
+            <SegmentedControl label="Analysis view" hideLabel value={view} options={VIEWS} onChange={setView} />
+          </div>
+
+          {view === "score" ? (
+            <Panel
+              title="Score · 简谱"
+              titleId="score-title"
+              description="Bars from the detected downbeats, chords on their rhythm positions, and a melody lane you can edit. The raw analysis is never changed."
+            >
+              <ScoreView session={activeSession} />
+            </Panel>
+          ) : (
+          <>
           <Panel
             title="Timeline"
             titleId="timeline-title"
@@ -329,6 +367,8 @@ export function AudioAnalysis() {
               </EmptyState>
             )}
           </Panel>
+          </>
+          )}
         </>
       )}
     </>
