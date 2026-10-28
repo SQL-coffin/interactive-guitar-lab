@@ -82,18 +82,12 @@ describe("http adapter: audio analysis", () => {
   });
 });
 
-describe("progression optimization seam", () => {
-  it("runs the shared engine optimizer for both adapters (no HTTP route exists yet)", async () => {
+describe("local adapter progression optimization", () => {
+  it("uses the shared engine in offline mode", async () => {
     const layers = ["C", "G"].map((root) => searchVoicings(root, "major", { limit: 3 }).results);
-    const http = await service().optimizeProgression({ layers, options: { limit: 2 } });
-    const local = await createLocalGuitarLabService().optimizeProgression({ layers, options: { limit: 2 } });
-    expect(http.results).toHaveLength(2);
-    expect(http.results[0]!.steps.map((s) => s.chordSymbol)).toEqual(["C", "G"]);
-    expect(local).toEqual(http);
-  });
-
-  it("reports engine validation errors as invalid_request", async () => {
-    await expect(service().optimizeProgression({ layers: [] })).rejects.toMatchObject({ code: "invalid_request" });
+    const result = await createLocalGuitarLabService().optimizeProgression({ layers, options: { limit: 2 } });
+    expect(result.results).toHaveLength(2);
+    expect(result.results[0]!.steps.map((step) => step.chordSymbol)).toEqual(["C", "G"]);
   });
 
   it("local adapter cannot analyze audio and says why", async () => {

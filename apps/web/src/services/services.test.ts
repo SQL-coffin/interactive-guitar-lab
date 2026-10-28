@@ -6,14 +6,41 @@ import { ServiceError } from "./errors";
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
+const progressionResult = {
+  results: [{ steps: [], totalCost: 0 }],
+  candidateCounts: [1],
+  pathExtensionsEvaluated: 0,
+  options: {
+    limit: 3,
+    localScoreWeight: 0.1,
+    chordConfidenceWeight: 20,
+    positionShiftWeight: 1.2,
+    stringMovementWeight: 0.35,
+    muteChangeWeight: 1.1,
+    bassMovementWeight: 0.15,
+  },
+};
+
 describe("http adapter", () => {
   it("builds the documented requests", async () => {
     const chord = { symbol: "C#m", root: "C#", quality: "minor", formula: ["1", "♭3", "5"], tones: [] };
+    const voicing = {
+      chordSymbol: "A",
+      strings: [],
+      notes: [],
+      frettedNotes: 0,
+      fretSpan: 0,
+      lowestFret: 0,
+      highestFret: 0,
+      missingDegrees: [],
+      score: 0,
+    };
     const bodies: Array<[string, unknown]> = [
       ["/chords/qualities", { qualities: ["major"] }],
       ["/chords?", chord],
       ["/fretboard", { tuning: [40, 45], maxFret: 12, positions: [] }],
       ["/voicings/search", { chord, results: [], totalFound: 0, options: {} }],
+      ["/progressions/optimize", progressionResult],
     ];
     const fetchMock = vi.fn(async (url: string) => json(bodies.find(([path]) => url.includes(path))![1]));
     const service = createHttpGuitarLabService("/api/", fetchMock as typeof fetch);
@@ -35,6 +62,18 @@ describe("http adapter", () => {
         body: JSON.stringify({ root: "A", quality: "major7", options: { maxFret: 9 } }),
       }),
     );
+
+    const controller = new AbortController();
+    const progressionRequest = { layers: [[voicing]], options: { limit: 3 } };
+    await expect(service.optimizeProgression(progressionRequest, { signal: controller.signal })).resolves.toEqual(progressionResult);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/progressions/optimize",
+      expect.objectContaining({
+        method: "POST",
+        signal: controller.signal,
+        body: JSON.stringify(progressionRequest),
+      }),
+    );
   });
 
   it("maps the error body to a ServiceError", async () => {
@@ -45,6 +84,14 @@ describe("http adapter", () => {
       code: "invalid_request",
       status: 400,
       message: "Invalid note spelling: H",
+    });
+  });
+
+  it("rejects malformed progression responses", async () => {
+    const service = createHttpGuitarLabService("/api", (async () => json({ results: [] })) as typeof fetch);
+    await expect(service.optimizeProgression({ layers: [] })).rejects.toMatchObject({
+      code: "internal_error",
+      message: "The API returned an unexpected progression optimization response.",
     });
   });
 

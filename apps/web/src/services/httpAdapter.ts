@@ -8,12 +8,12 @@ import type {
 } from "./contract";
 import { ServiceError, isAbortError } from "./errors";
 import type { GuitarLabService, UploadRequestOptions } from "./guitarLabService";
-import { optimizeProgressionInProcess } from "./progressionOptimizer";
 import {
   isAudioAnalysisResponse,
   isChordQualitiesResponse,
   isChordResponse,
   isFretboardResponse,
+  isProgressionOptimizationResponse,
   isVoicingSearchResponse,
 } from "./responseGuards";
 
@@ -145,6 +145,14 @@ export function createHttpGuitarLabService(
         "audio analysis",
       );
     },
-    optimizeProgression: optimizeProgressionInProcess,
+    async optimizeProgression(progressionRequest, options) {
+      const init: RequestInit = { method: "POST", body: JSON.stringify(progressionRequest) };
+      if (options?.signal) init.signal = options.signal;
+      return expectShape(
+        await request("/progressions/optimize", init),
+        isProgressionOptimizationResponse,
+        "progression optimization",
+      );
+    },
   };
 }

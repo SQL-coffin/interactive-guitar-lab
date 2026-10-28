@@ -3,6 +3,7 @@ import type {
   ChordQualitiesResponse,
   ChordResponse,
   FretboardResponse,
+  ProgressionOptimizationResponse,
   VoicingSearchResponse,
 } from "./contract";
 
@@ -29,6 +30,39 @@ export function isVoicingSearchResponse(value: unknown): value is VoicingSearchR
 
 export function isFretboardResponse(value: unknown): value is FretboardResponse {
   return isRecord(value) && Array.isArray(value.tuning) && isNumber(value.maxFret) && Array.isArray(value.positions);
+}
+
+export function isProgressionOptimizationResponse(value: unknown): value is ProgressionOptimizationResponse {
+  if (!isRecord(value)
+      || !Array.isArray(value.results)
+      || !Array.isArray(value.candidateCounts)
+      || !value.candidateCounts.every(isNumber)
+      || !isNumber(value.pathExtensionsEvaluated)
+      || !isRecord(value.options)) {
+    return false;
+  }
+  const options = value.options;
+  if (!["limit", "localScoreWeight", "chordConfidenceWeight", "positionShiftWeight", "stringMovementWeight",
+    "muteChangeWeight", "bassMovementWeight"].every((key) => isNumber(options[key]))) {
+    return false;
+  }
+  return value.results.every((result) =>
+    isRecord(result)
+    && isNumber(result.totalCost)
+    && Array.isArray(result.steps)
+    && result.steps.every((step) =>
+      isRecord(step)
+      && typeof step.chordSymbol === "string"
+      && isNumber(step.candidateIndex)
+      && isRecord(step.voicing)
+      && isNumber(step.chordConfidence)
+      && isNumber(step.candidateScore)
+      && isNumber(step.chordPenalty)
+      && isNumber(step.localCost)
+      && isNumber(step.transitionCost)
+      && isNumber(step.cumulativeCost),
+    ),
+  );
 }
 
 export function isAudioAnalysisResponse(value: unknown): value is AudioAnalysisResponse {
