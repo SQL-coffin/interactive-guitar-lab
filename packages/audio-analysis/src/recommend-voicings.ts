@@ -43,7 +43,7 @@ function validateOptions(input: ChromaProgressionAnalysisOptions): Required<
   const chordCandidateLimit = input.chordCandidateLimit ?? 3;
   const voicingsPerChord = input.voicingsPerChord ?? 5;
   const chordQualities = input.chordQualities ? [...input.chordQualities] : getSupportedChordQualities();
-  const bassRootBonus = input.bassRootBonus ?? 0.04;
+  const bassRootBonus = input.bassRootBonus ?? 0.1;
   if (!Number.isInteger(chordCandidateLimit) || chordCandidateLimit < 1 || chordCandidateLimit > 72) {
     throw new RangeError("chordCandidateLimit must be an integer from 1 to 72.");
   }
@@ -78,7 +78,7 @@ export function analyzeChromaProgression(
   const frameResults = frames.map((frame) => inferChordCandidates(frame, inferenceOptions));
   const progressionFrameIndexes: number[] = [];
   const skippedSilentFrameIndexes: number[] = [];
-  const candidateLayers: Array<Array<{ voicing: Voicing; chordConfidence: number }>> = [];
+  const candidateLayers: Array<Array<{ voicing: Voicing; chordConfidence: number; candidateScore: number }>> = [];
   const voicingCache = new Map<string, Voicing[]>();
   const voicingSearchOptions: VoicingSearchOptions = {
     ...(input.voicingSearchOptions ?? {}),
@@ -91,7 +91,7 @@ export function analyzeChromaProgression(
       return;
     }
 
-    const layer: Array<{ voicing: Voicing; chordConfidence: number }> = [];
+    const layer: Array<{ voicing: Voicing; chordConfidence: number; candidateScore: number }> = [];
     for (const chordCandidate of frameResult.candidates) {
       const cacheKey = `${chordCandidate.root}|${chordCandidate.quality}`;
       let voicings = voicingCache.get(cacheKey);
@@ -104,7 +104,11 @@ export function analyzeChromaProgression(
         voicingCache.set(cacheKey, voicings);
       }
       for (const voicing of voicings) {
-        layer.push({ voicing, chordConfidence: chordCandidate.confidence });
+        layer.push({
+          voicing,
+          chordConfidence: chordCandidate.confidence,
+          candidateScore: chordCandidate.score,
+        });
       }
     }
 

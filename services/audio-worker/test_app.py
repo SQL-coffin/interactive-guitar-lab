@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import asyncio
 import io
 import math
 import unittest
 
-import httpx
 import numpy as np
 import soundfile as sf
+from fastapi.testclient import TestClient
 
 from app import app, extract_chroma_features
 
@@ -37,16 +36,12 @@ def make_click_track(bpm: int = 120, duration_seconds: float = 8.0) -> bytes:
     return stream.getvalue()
 
 
-def http_request(method: str, path: str, **kwargs: object) -> httpx.Response:
-    async def perform() -> httpx.Response:
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app),
-            base_url="http://testserver",
-        ) as client:
-            request_method = getattr(client, method)
-            return await request_method(path, **kwargs)
-
-    return asyncio.run(perform())
+def http_request(method: str, path: str, **kwargs: object):
+    # TestClient manages the ASGI lifespan and worker-thread cleanup together.
+    # Repeated asyncio.run() calls left AnyIO worker threads alive during Python 3.14 teardown.
+    with TestClient(app) as client:
+        request_method = getattr(client, method)
+        return request_method(path, **kwargs)
 
 
 class AudioWorkerTests(unittest.TestCase):
@@ -73,6 +68,10 @@ class AudioWorkerTests(unittest.TestCase):
         self.assertGreaterEqual(tempo, 40)
         self.assertLessEqual(tempo, 240)
         self.assertGreaterEqual(len(result["rhythm"]["beatTimesSeconds"]), 4)
+
+    def test_extracts_low_register_bass_pitch_class(self) -> None:
+        result = extract_chroma_features(make_wav(frequency_hz=92.5), "fsharp-bass.wav", window_seconds=0.5)
+        self.assertTrue(all(frame["bassPitchClass"] == 6 for frame in result["frames"]))
 
     def test_rejects_empty_payload_and_invalid_window(self) -> None:
         with self.assertRaises(ValueError):

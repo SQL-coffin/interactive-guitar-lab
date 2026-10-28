@@ -8,8 +8,8 @@ import type {
 
 const DEFAULTS: Required<ProgressionOptimizationOptions> = {
   limit: 5,
-  localScoreWeight: 0.35,
-  chordConfidenceWeight: 3.0,
+  localScoreWeight: 0.1,
+  chordConfidenceWeight: 20.0,
   positionShiftWeight: 1.2,
   stringMovementWeight: 0.35,
   muteChangeWeight: 1.1,
@@ -19,6 +19,7 @@ const DEFAULTS: Required<ProgressionOptimizationOptions> = {
 interface NormalizedCandidate {
   voicing: Voicing;
   chordConfidence: number;
+  candidateScore: number;
 }
 
 interface PathState {
@@ -45,12 +46,16 @@ function validateOptions(input: ProgressionOptimizationOptions): Required<Progre
 function normalizeCandidate(input: ProgressionCandidateInput): NormalizedCandidate {
   if ("voicing" in input) {
     const confidence = input.chordConfidence ?? 1;
+    const candidateScore = input.candidateScore ?? confidence;
     if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
       throw new RangeError("chordConfidence must be between 0 and 1.");
     }
-    return { voicing: input.voicing, chordConfidence: confidence };
+    if (!Number.isFinite(candidateScore) || candidateScore < 0 || candidateScore > 1) {
+      throw new RangeError("candidateScore must be between 0 and 1.");
+    }
+    return { voicing: input.voicing, chordConfidence: confidence, candidateScore };
   }
-  return { voicing: input, chordConfidence: 1 };
+  return { voicing: input, chordConfidence: 1, candidateScore: 1 };
 }
 
 function validateCandidateLayers(
@@ -165,11 +170,22 @@ export function optimizeVoicingProgression(
 ): ProgressionOptimizationResult {
   const options = validateOptions(input);
   const normalizedLayers = validateCandidateLayers(candidateLayers);
+  // Engine scores are unbounded heuristic penalties. Normalize within each time layer so
+  // an unusually large fretboard score cannot overpower audio chord evidence by accident.
+  const localCosts = normalizedLayers.map((layer) => {
+    const scores = layer.map((candidate) => candidate.voicing.score);
+    const minimum = Math.min(...scores);
+    const maximum = Math.max(...scores);
+    const range = maximum - minimum;
+    return scores.map((score) => range <= 1e-9
+      ? 0
+      : ((score - minimum) / range) * options.localScoreWeight);
+  });
 
   let pathExtensionsEvaluated = 0;
   let statesByCandidate: PathState[][] = normalizedLayers[0]!.map((candidate, candidateIndex) => {
-    const localCost = candidate.voicing.score * options.localScoreWeight;
-    const chordPenalty = (1 - candidate.chordConfidence) * options.chordConfidenceWeight;
+    const localCost = localCosts[0]![candidateIndex]!;
+    const chordPenalty = (1 - candidate.candidateScore) * options.chordConfidenceWeight;
     return [{
       candidateIndex,
       candidateIndexes: [candidateIndex],
@@ -178,6 +194,7 @@ export function optimizeVoicingProgression(
         candidateIndex,
         voicing: candidate.voicing,
         chordConfidence: candidate.chordConfidence,
+        candidateScore: candidate.candidateScore,
         chordPenalty,
         localCost,
         transitionCost: 0,
@@ -194,8 +211,8 @@ export function optimizeVoicingProgression(
 
     currentLayer.forEach((currentCandidate, currentIndex) => {
       const currentVoicing = currentCandidate.voicing;
-      const localCost = currentVoicing.score * options.localScoreWeight;
-      const chordPenalty = (1 - currentCandidate.chordConfidence) * options.chordConfidenceWeight;
+      const localCost = localCosts[layerIndex]![currentIndex]!;
+      const chordPenalty = (1 - currentCandidate.candidateScore) * options.chordConfidenceWeight;
       const pathsForCurrent: PathState[] = [];
 
       previousLayer.forEach((previousCandidate, previousIndex) => {
@@ -208,6 +225,7 @@ export function optimizeVoicingProgression(
             candidateIndex: currentIndex,
             voicing: currentVoicing,
             chordConfidence: currentCandidate.chordConfidence,
+            candidateScore: currentCandidate.candidateScore,
             chordPenalty,
             localCost,
             transitionCost,

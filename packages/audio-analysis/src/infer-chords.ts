@@ -12,7 +12,7 @@ import type {
 
 const ROOT_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
 const DEFAULT_LIMIT = 5;
-const DEFAULT_BASS_ROOT_BONUS = 0.04;
+const DEFAULT_BASS_ROOT_BONUS = 0.1;
 const ACTIVE_PITCH_RELATIVE_THRESHOLD = 0.15;
 
 function validateFrame(frame: ChromaFrame): number[] {
@@ -27,7 +27,7 @@ function validateFrame(frame: ChromaFrame): number[] {
   if (values.some((value) => !Number.isFinite(value) || value < 0)) {
     throw new RangeError("Chroma values must be finite non-negative numbers.");
   }
-  if (frame.bassPitchClass !== undefined
+  if (frame.bassPitchClass != null
       && (!Number.isInteger(frame.bassPitchClass) || frame.bassPitchClass < 0 || frame.bassPitchClass > 11)) {
     throw new RangeError("bassPitchClass must be an integer from 0 to 11.");
   }
@@ -87,7 +87,7 @@ export function inferChordCandidates(
       const templateNorm = Math.sqrt(tonePitchClasses.size);
       const confidence = Math.max(0, Math.min(1, dotProduct / (vectorNorm * templateNorm)));
       const nonChordEnergy = Math.max(0, totalEnergy - selectedEnergy);
-      const bassRootMatch = frame.bassPitchClass === undefined
+      const bassRootMatch = frame.bassPitchClass == null
         ? null
         : frame.bassPitchClass === rootPitchClass;
       const score = Math.min(1, confidence + (bassRootMatch ? options.bassRootBonus : 0));

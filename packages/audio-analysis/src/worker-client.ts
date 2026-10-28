@@ -62,13 +62,20 @@ function parseFeatureResponse(value: unknown): AudioFeatureResponse {
         || frame.startSeconds < 0 || frame.endSeconds < frame.startSeconds
         || !Array.isArray(frame.chroma) || frame.chroma.length !== 12
         || frame.chroma.some((sample) => typeof sample !== "number"
-          || !Number.isFinite(sample) || sample < 0 || sample > 1)) {
+          || !Number.isFinite(sample) || sample < 0 || sample > 1)
+        || (frame.bassPitchClass !== undefined && frame.bassPitchClass !== null
+          && (typeof frame.bassPitchClass !== "number"
+            || !Number.isInteger(frame.bassPitchClass)
+            || frame.bassPitchClass < 0 || frame.bassPitchClass > 11))) {
       throw new AudioWorkerError(`Audio worker returned invalid chroma data for frame ${index}.`, null);
     }
     return {
       startSeconds: frame.startSeconds,
       endSeconds: frame.endSeconds,
       chroma: frame.chroma as number[],
+      ...(frame.bassPitchClass === undefined
+        ? {}
+        : { bassPitchClass: frame.bassPitchClass as number | null }),
     };
   });
 

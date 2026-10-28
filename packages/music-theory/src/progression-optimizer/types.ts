@@ -3,9 +3,9 @@ import type { Voicing } from "../voicings/index.js";
 export interface ProgressionOptimizationOptions {
   /** Number of distinct candidate sequences to return. Defaults to 5. */
   limit?: number;
-  /** Weight applied to each existing voicing score. Defaults to 0.35. */
+  /** Weight applied to each layer-normalized ergonomic voicing penalty. Defaults to 0.1. */
   localScoreWeight?: number;
-  /** Penalty weight for low-confidence audio chord hypotheses. Defaults to 3.0. */
+  /** Penalty weight for low-confidence audio chord hypotheses. Defaults to 20.0. */
   chordConfidenceWeight?: number;
   /** Penalty per fret of hand-position movement. Defaults to 1.2. */
   positionShiftWeight?: number;
@@ -24,6 +24,8 @@ export interface ProgressionOptimizationOptions {
 export interface ProgressionVoicingCandidate {
   voicing: Voicing;
   chordConfidence?: number;
+  /** Combined ranking score (for example, chroma fit plus bass agreement). Defaults to confidence. */
+  candidateScore?: number;
 }
 
 /** Raw Voicing input remains supported for known chord progressions. */
@@ -35,6 +37,7 @@ export interface OptimizedVoicingStep {
   candidateIndex: number;
   voicing: Voicing;
   chordConfidence: number;
+  candidateScore: number;
   chordPenalty: number;
   localCost: number;
   transitionCost: number;

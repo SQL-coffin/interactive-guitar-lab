@@ -14,7 +14,7 @@ function workerPayload() {
     sampleRate: 22050,
     windowSeconds: 0.5,
     rhythm: { tempoBpm: 120, beatTimesSeconds: [0, 0.5] },
-    frames: [{ startSeconds: 0, endSeconds: 0.5, chroma: Array.from({ length: 12 }, (_, i) => i === 0 ? 1 : 0) }],
+    frames: [{ startSeconds: 0, endSeconds: 0.5, chroma: Array.from({ length: 12 }, (_, i) => i === 0 ? 1 : 0), bassPitchClass: 9 }],
   };
 }
 
@@ -34,6 +34,7 @@ describe("audio worker HTTP client", () => {
     expect(result.frames[0]!.chroma[0]).toBe(1);
     expect(result.rhythm.tempoBpm).toBe(120);
     expect(result.rhythm.beatTimesSeconds).toEqual([0, 0.5]);
+    expect(result.frames[0]!.bassPitchClass).toBe(9);
     const requestInit = mockFetch.mock.calls[0]![1];
     expect(requestInit?.method).toBe("POST");
     expect(requestInit?.body).toBeInstanceOf(FormData);
@@ -80,8 +81,8 @@ describe("audio worker HTTP client", () => {
       ...workerPayload(),
       durationSeconds: 1,
       frames: [
-        { startSeconds: 0, endSeconds: 0.5, chroma: aMaj7 },
-        { startSeconds: 0.5, endSeconds: 1, chroma: fSharpMinor7 },
+        { startSeconds: 0, endSeconds: 0.5, chroma: aMaj7, bassPitchClass: 9 },
+        { startSeconds: 0.5, endSeconds: 1, chroma: fSharpMinor7, bassPitchClass: 6 },
       ],
     };
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })));

@@ -6,7 +6,7 @@ export interface ChromaFrame {
   /** Non-negative chroma energies ordered C, C#, D, D#, E, F, F#, G, G#, A, A#, B. */
   chroma: readonly number[];
   /** Optional bass estimate as pitch class 0-11 from the feature extractor. */
-  bassPitchClass?: number;
+  bassPitchClass?: number | null;
 }
 
 export interface ChordInferenceOptions {
@@ -14,7 +14,7 @@ export interface ChordInferenceOptions {
   limit?: number;
   /** Candidate chord families. Defaults to all qualities supported by music-theory. */
   qualities?: readonly ChordQuality[];
-  /** Small ranking bonus when the detected bass agrees with the chord root. Defaults to 0.04. */
+  /** Ranking bonus when the detected bass agrees with the chord root. Defaults to 0.1. */
   bassRootBonus?: number;
 }
 

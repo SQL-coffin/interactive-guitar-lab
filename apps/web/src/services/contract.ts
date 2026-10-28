@@ -5,8 +5,8 @@
  * so the UI cannot drift from the engine's shapes. When `packages/contracts` lands, these
  * aliases should be repointed there; the UI only imports from this module.
  *
- * The HTTP routes below are documented in `docs/frontend-api-contract.md` and are NOT yet
- * implemented by the backend.
+ * The chord, voicing, fretboard, and audio-analysis HTTP routes are implemented under
+ * `src/app/api`. See `docs/frontend-api-contract.md` for request/response details.
  */
 import type {
   BuiltChord,

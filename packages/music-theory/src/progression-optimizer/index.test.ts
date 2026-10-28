@@ -113,6 +113,6 @@ describe("progression voicing optimizer", () => {
 
     expect(result.results[0]!.steps[0]!.chordSymbol).toBe("Amaj7");
     expect(result.results[0]!.steps[0]!.chordConfidence).toBe(0.95);
-    expect(result.results[0]!.steps[0]!.chordPenalty).toBeCloseTo(0.15);
+    expect(result.results[0]!.steps[0]!.chordPenalty).toBeCloseTo(1.0);
   });
 });

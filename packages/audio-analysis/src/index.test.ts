@@ -40,6 +40,29 @@ describe("chroma-based chord inference", () => {
     expect(result.candidates[0]!.evidence.bassRootMatch).toBe(true);
   });
 
+  it("uses low-register bass evidence to resolve otherwise ambiguous shared tones", () => {
+    const energies = Array.from({ length: 12 }, () => 0);
+    energies[6] = 0.6; // F#
+    energies[9] = 1; // A
+    energies[1] = 1; // C#
+    energies[4] = 1; // E
+    energies[8] = 1; // G#
+
+    const withoutBass = inferChordCandidates(chromaFrame(energies), {
+      limit: 1,
+      qualities: ["major7", "minor7"],
+      bassRootBonus: 0,
+    });
+    const withBass = inferChordCandidates(chromaFrame(energies, 6), {
+      limit: 1,
+      qualities: ["major7", "minor7"],
+    });
+
+    expect(withoutBass.candidates[0]!.symbol).toBe("AMaj7");
+    expect(withBass.candidates[0]!.symbol).toBe("F#m7");
+    expect(withBass.candidates[0]!.evidence.bassRootMatch).toBe(true);
+  });
+
   it("returns no chord candidates for a silent frame", () => {
     const result = inferChordCandidates(chromaFrame(Array.from({ length: 12 }, () => 0)));
     expect(result.candidates).toEqual([]);

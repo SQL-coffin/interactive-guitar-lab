@@ -16,6 +16,8 @@ FFT_SIZE = 4_096
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_DURATION_SECONDS = 600.0
 SUPPORTED_CHROMA_BINS = 12
+MIN_BASS_HZ = 35.0
+MAX_BASS_HZ = 250.0
 
 
 class AudioInputError(ValueError):
@@ -31,6 +33,7 @@ class ChromaFrame(ApiModel):
     end_seconds: float = Field(alias="endSeconds")
     # C, C#, D, D#, E, F, F#, G, G#, A, A#, B; normalized to [0, 1].
     chroma: list[float]
+    bass_pitch_class: int | None = Field(alias="bassPitchClass")
 
 
 class RhythmEstimate(ApiModel):
@@ -53,6 +56,57 @@ app = FastAPI(
     version="0.1.0",
     description="Extracts time-aligned chroma features; chord interpretation remains in TypeScript.",
 )
+
+
+def estimate_bass_pitch_class(
+    samples: np.ndarray,
+    sample_rate: int,
+    start_seconds: float,
+    end_seconds: float,
+) -> int | None:
+    """Estimate the strongest low-register pitch class within one analysis window."""
+    start = max(0, int(start_seconds * sample_rate))
+    end = min(samples.size, int(end_seconds * sample_rate))
+    segment = samples[start:end]
+    if segment.size < 512 or float(np.max(np.abs(segment))) <= 1e-8:
+        return None
+
+    spectrum = np.abs(librosa.stft(
+        segment,
+        n_fft=FFT_SIZE,
+        hop_length=HOP_LENGTH,
+        center=True,
+    ))
+    mean_magnitude = np.mean(spectrum, axis=1)
+    frequencies = librosa.fft_frequencies(sr=sample_rate, n_fft=FFT_SIZE)
+    band = np.flatnonzero((frequencies >= MIN_BASS_HZ) & (frequencies <= MAX_BASS_HZ))
+    if band.size == 0:
+        return None
+
+    low_band_magnitudes = mean_magnitude[band]
+    strongest_magnitude = float(np.max(low_band_magnitudes))
+    overall_magnitude = float(np.max(mean_magnitude))
+    if overall_magnitude <= 1e-8 or strongest_magnitude < overall_magnitude * 0.01:
+        return None
+
+    # Select the lowest meaningful spectral peak, not simply the loudest low-band peak.
+    # A chord's third can be louder than its root, especially in bright guitar voicings.
+    if low_band_magnitudes.size >= 3:
+        local_maxima = np.flatnonzero(
+            (low_band_magnitudes[1:-1] >= low_band_magnitudes[:-2])
+            & (low_band_magnitudes[1:-1] >= low_band_magnitudes[2:])
+        ) + 1
+        meaningful_peaks = local_maxima[
+            low_band_magnitudes[local_maxima] >= strongest_magnitude * 0.2
+        ]
+    else:
+        meaningful_peaks = np.array([], dtype=int)
+    selected_index = int(meaningful_peaks[0]) if meaningful_peaks.size else int(np.argmax(low_band_magnitudes))
+    frequency = float(frequencies[band[selected_index]])
+    if frequency <= 0:
+        return None
+    midi = int(round(69 + 12 * math.log2(frequency / 440.0)))
+    return midi % 12
 
 
 def extract_chroma_features(
@@ -154,6 +208,12 @@ def extract_chroma_features(
             "startSeconds": round(start_seconds, 4),
             "endSeconds": round(end_seconds, 4),
             "chroma": [round(float(value), 6) for value in values],
+            "bassPitchClass": estimate_bass_pitch_class(
+                samples,
+                sample_rate,
+                start_seconds,
+                end_seconds,
+            ),
         })
 
     return {
