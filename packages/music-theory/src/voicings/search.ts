@@ -79,6 +79,7 @@ export function searchVoicings(
       if (notes.length < options.minNotes || notes.length > options.maxNotes) return;
       const present = new Set(notes.map((note) => note.pitchClass));
       if (options.requireRoot && !present.has(chord.tones[0]!.pitchClass)) return;
+      if (options.requireAllTones && chord.tones.some((tone) => !present.has(tone.pitchClass))) return;
       const frets = notes.filter((note) => note.fret > 0).map((note) => note.fret);
       const lowestFret = frets.length ? Math.min(...frets) : 0;
       const highestFret = frets.length ? Math.max(...frets) : 0;
