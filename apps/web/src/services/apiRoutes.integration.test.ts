@@ -4,7 +4,7 @@ import { POST as optimizeRoute } from "@/app/api/progressions/optimize/route";
 import { POST as searchRoute } from "@/app/api/voicings/search/route";
 import { createHttpGuitarLabService } from "./httpAdapter";
 import { PROGRESSION_OPTIMIZE_LIMITS } from "./contract";
-import { candidatesPerChord, DEFAULT_PROGRESSION_SETTINGS, MAX_PROGRESSION_LENGTH } from "@/state/progressionState";
+import { candidatesPerChord, DEFAULT_PROGRESSION_SETTINGS, MAX_OPTIMIZE_SEGMENT, MAX_PROGRESSION_LENGTH, optimizeSegment } from "@/state/progressionState";
 
 /**
  * Runs the real HTTP adapter against the real route handlers (no network, no mocks), so a
@@ -34,8 +34,13 @@ async function layersFor(chordCount: number, requested: number) {
 
 describe("progression requests built by the UI are accepted by the real route", () => {
   it("keeps the largest UI progression within the server's candidate limits (regression: 12 x 20 → HTTP 400)", async () => {
-    expect(MAX_PROGRESSION_LENGTH).toBe(PROGRESSION_OPTIMIZE_LIMITS.maxLayers);
-    const layers = await layersFor(MAX_PROGRESSION_LENGTH, 20);
+    // Long progressions (e.g. from audio) are optimized in segments no larger than the route allows.
+    expect(MAX_OPTIMIZE_SEGMENT).toBe(PROGRESSION_OPTIMIZE_LIMITS.maxLayers);
+    const longest = Array.from({ length: MAX_PROGRESSION_LENGTH }, (_, i) => ({ id: String(i), root: "C", quality: "major" as const }));
+    const segment = optimizeSegment({ slots: longest, settings: { ...DEFAULT_PROGRESSION_SETTINGS, segmentStart: 1_000 } });
+    expect(segment.slots).toHaveLength(MAX_OPTIMIZE_SEGMENT);
+    expect(segment.start).toBe(MAX_PROGRESSION_LENGTH - MAX_OPTIMIZE_SEGMENT);
+    const layers = await layersFor(segment.slots.length, 20);
     expect(layers.flat().length).toBeLessThanOrEqual(PROGRESSION_OPTIMIZE_LIMITS.maxTotalCandidates);
     const result = await service.optimizeProgression({ layers, options: { limit: 5 } });
     expect(result.results).toHaveLength(5);

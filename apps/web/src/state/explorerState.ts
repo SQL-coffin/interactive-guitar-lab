@@ -61,6 +61,12 @@ export const INITIAL_EXPLORER_STATE: ExplorerState = {
 /** New results invalidate result indexes. */
 const FRESH_RESULTS = { selectedVoicing: 0, compareVoicing: null } as const;
 
+/** Starting state for a chord opened from elsewhere (e.g. a progression chord). */
+export function explorerStateFor(root: string | null, quality: ChordQuality | null): ExplorerState {
+  if (!root || !quality) return INITIAL_EXPLORER_STATE;
+  return { ...INITIAL_EXPLORER_STATE, root, quality, spelling: /^[A-G]b/.test(root) ? "flat" : "sharp" };
+}
+
 export function explorerReducer(state: ExplorerState, action: ExplorerAction): ExplorerState {
   switch (action.type) {
     case "setRoot":

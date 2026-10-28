@@ -33,11 +33,11 @@ export function useAudioAnalysis(service: GuitarLabService) {
   useEffect(() => () => controllerRef.current?.abort(), []);
 
   const analyze = useCallback(
-    async (file: File, windowSeconds: number, options: ChromaProgressionAnalysisOptions) => {
+    async (file: File, windowSeconds: number, options: ChromaProgressionAnalysisOptions): Promise<AudioAnalysisResponse | undefined> => {
       const invalid = validateAudioFile(file);
       if (invalid) {
         setState({ status: "error", fileName: file.name, error: invalid });
-        return;
+        return undefined;
       }
       controllerRef.current?.abort();
       const controller = new AbortController();
@@ -58,9 +58,11 @@ export function useAudioAnalysis(service: GuitarLabService) {
             },
           },
         );
-        if (!controller.signal.aborted) setState({ status: "success", fileName: file.name, result });
+        if (controller.signal.aborted) return undefined;
+        setState({ status: "success", fileName: file.name, result });
+        return result;
       } catch (error) {
-        if (controller.signal.aborted || isAbortError(error)) return;
+        if (controller.signal.aborted || isAbortError(error)) return undefined;
         setState({
           status: "error",
           fileName: file.name,
@@ -68,6 +70,7 @@ export function useAudioAnalysis(service: GuitarLabService) {
             ? error
             : new ServiceError("internal_error", error instanceof Error ? error.message : "Unexpected error."),
         });
+        return undefined;
       }
     },
     [service],

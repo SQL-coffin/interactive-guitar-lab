@@ -1,5 +1,8 @@
 export { inferChordCandidates } from "./infer-chords.js";
 export { analyzeChromaProgression } from "./recommend-voicings.js";
+export { buildChordSheet } from "./chord-sheet.js";
+export { suggestChordSheetRefinements } from "./chord-sheet-refinement.js";
+export type { ChordSheetRefinementOptions, ChordSheetRefinementSuggestion } from "./chord-sheet-refinement.js";
 export { analyzeAudioForChords } from "./analyze-audio.js";
 export { AudioWorkerError, extractAudioFeatures } from "./worker-client.js";
 export {
@@ -14,6 +17,7 @@ export type {
   ChordInferenceResult,
   ChromaFrame,
 } from "./types.js";
+export type { ChordSheetEvent, ChordSheetOptions, ChordSheetResult } from "./chord-sheet.js";
 export type {
   ChromaProgressionAnalysisOptions,
   ChromaProgressionAnalysisResult,

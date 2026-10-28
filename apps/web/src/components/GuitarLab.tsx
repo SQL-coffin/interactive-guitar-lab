@@ -11,7 +11,9 @@ import { TransitionSummary } from "./Voicings/TransitionSummary";
 import type { BuiltChord, ChordQuality, VoicingSearchResult } from "@/services";
 import { useGuitarLabService } from "@/state/ServiceContext";
 import { useAsyncResource } from "@/state/useAsyncResource";
-import { INITIAL_EXPLORER_STATE, explorerReducer, toSearchOptions, type LabelMode } from "@/state/explorerState";
+import { explorerReducer, explorerStateFor, toSearchOptions, type LabelMode } from "@/state/explorerState";
+import { useLab } from "@/state/lab/LabSessionProvider";
+import Link from "next/link";
 import { EMPTY_SELECTION, fretboardSelectionReducer } from "@/state/fretboardSelection";
 import { displaySpelling } from "@/lib/roots";
 import { Panel } from "./ui/Panel";
@@ -34,9 +36,10 @@ const LABEL_MODES: ReadonlyArray<{ value: LabelMode; label: string }> = [
 ];
 
 /** Composition root: owns UI state and wires service data into presentational components. */
-export function GuitarLab() {
+export function GuitarLab({ initialRoot = null, initialQuality = null }: { initialRoot?: string | null; initialQuality?: ChordQuality | null } = {}) {
   const service = useGuitarLabService();
-  const [state, dispatch] = useReducer(explorerReducer, INITIAL_EXPLORER_STATE);
+  const [state, dispatch] = useReducer(explorerReducer, undefined, () => explorerStateFor(initialRoot, initialQuality));
+  const { draft } = useLab();
   const [selection, dispatchSelection] = useReducer(fretboardSelectionReducer, EMPTY_SELECTION);
   const { root, quality, constraints, labelMode } = state;
 
@@ -75,6 +78,12 @@ export function GuitarLab() {
       <PageIntro title="Chord explorer">
         Pick a root and quality, see every chord tone on the neck, and compare playable voicings string by string.
       </PageIntro>
+      {draft.progression.slots.length > 0 ? (
+        <p className={styles.progressionNote} role="note">
+          Active progression “{draft.name}” ({draft.progression.slots.length} chords{draft.dirty ? ", unsaved" : ""}) is kept while you
+          explore. <Link href="/progressions">Back to the Progression Builder</Link>
+        </p>
+      ) : null}
 
       <div className={styles.layout}>
         <aside className={styles.sidebar} aria-label="Chord explorer controls">

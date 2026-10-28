@@ -1,9 +1,11 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { analyzeChromaProgression } from "@interactive-guitar-lab/audio-analysis";
+import { analyzeChromaProgression, buildChordSheet } from "@interactive-guitar-lab/audio-analysis";
 import { createLocalGuitarLabService, ServiceError, type AudioAnalysisResponse, type GuitarLabService } from "@/services";
 import { GuitarLabServiceProvider } from "@/state/ServiceContext";
+import { LabSessionProvider } from "@/state/lab/LabSessionProvider";
+import { createMemoryRepository } from "@/state/lab/repository";
 import { AudioAnalysis } from "./AudioAnalysis";
 
 // Fixture produced by the backend's own analysis pipeline from synthetic chroma, so its
@@ -15,6 +17,7 @@ const frames = [
   { startSeconds: 2, endSeconds: 3, chroma: chroma([]), bassPitchClass: null },
   { startSeconds: 3, endSeconds: 4, chroma: chroma([7, 11, 2]), bassPitchClass: 7 },
 ];
+const chordAnalysis = analyzeChromaProgression(frames, { chordCandidateLimit: 3, voicingsPerChord: 3, progressionOptions: { limit: 2 } });
 const fixture: AudioAnalysisResponse = {
   audio: {
     schemaVersion: "1.0",
@@ -24,7 +27,8 @@ const fixture: AudioAnalysisResponse = {
     windowSeconds: 1,
     rhythm: { tempoBpm: 96, beatTimesSeconds: [0.5, 1.1, 1.7] },
   },
-  chordAnalysis: analyzeChromaProgression(frames, { chordCandidateLimit: 3, voicingsPerChord: 3, progressionOptions: { limit: 2 } }),
+  chordAnalysis,
+  chordSheet: buildChordSheet(chordAnalysis.frameResults),
 };
 
 beforeEach(() => {
@@ -36,7 +40,9 @@ function renderAudio(analyzeAudio: GuitarLabService["analyzeAudio"]) {
   const service = { ...createLocalGuitarLabService(), analyzeAudio };
   render(
     <GuitarLabServiceProvider service={service}>
-      <AudioAnalysis />
+      <LabSessionProvider repository={createMemoryRepository()}>
+        <AudioAnalysis />
+      </LabSessionProvider>
     </GuitarLabServiceProvider>,
   );
 }

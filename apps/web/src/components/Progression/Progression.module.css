@@ -409,3 +409,142 @@
     padding: var(--space-3);
   }
 }
+
+/* ---------- Active progression and sources ---------- */
+.sessionBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.sessionMain {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+  min-width: 220px;
+}
+
+.nameInput {
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-weight: 650;
+  max-width: 420px;
+}
+
+.sessionMeta {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.unsaved {
+  color: var(--accent);
+}
+
+.sessionActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.savedList {
+  flex-basis: 100%;
+  font-size: 0.85rem;
+}
+
+.savedList summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.savedList ul {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.savedList li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.savedName {
+  font-weight: 650;
+}
+
+.activeBadge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.slot[data-origin="corrected"] {
+  border-style: dashed;
+  border-color: var(--accent);
+}
+
+.sourceInfo {
+  display: grid;
+  gap: 4px;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.originBadge {
+  justify-self: start;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+
+.originBadge[data-origin="corrected"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sourceTime {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sourceActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+}
+
+.textButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-align: left;
+  justify-self: start;
+}
+
+.slotDiagram {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}

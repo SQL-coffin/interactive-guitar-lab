@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ActiveContext } from "./ActiveContext";
 import { NavLinks } from "./NavLinks";
 import styles from "./AppShell.module.css";
 
@@ -17,6 +18,7 @@ export function AppHeader() {
           <span className={styles.brandText}>Guitar Theory Lab</span>
         </Link>
         <NavLinks />
+        <ActiveContext />
       </div>
     </header>
   );

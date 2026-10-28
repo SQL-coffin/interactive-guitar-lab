@@ -1,9 +1,13 @@
 import { PROGRESSION_OPTIMIZE_LIMITS, type ChordQuality } from "@/services";
+import type { SlotSource } from "./lab/model";
 
 export interface ProgressionSlot {
   id: string;
+  /** The chord in use: the detected chord, or the user's correction of it. */
   root: string;
   quality: ChordQuality;
+  /** Present when the chord came from an audio analysis; never modified by edits. */
+  source?: SlotSource;
 }
 
 export interface ProgressionSettings {
@@ -14,6 +18,8 @@ export interface ProgressionSettings {
   minNotes: number;
   /** Number of ranked paths requested from the optimizer. */
   pathLimit: number;
+  /** First chord of the optimized segment when the progression is longer than the optimizer allows. */
+  segmentStart: number;
 }
 
 export interface ProgressionState {
@@ -28,10 +34,14 @@ export type ProgressionAction =
   | { type: "move"; id: string; offset: -1 | 1 }
   | { type: "update"; id: string; patch: Partial<Pick<ProgressionSlot, "root" | "quality">> }
   | { type: "replaceAll"; chords: ReadonlyArray<Pick<ProgressionSlot, "root" | "quality">> }
+  | { type: "revert"; id: string }
   | { type: "clear" }
+  | { type: "load"; slots: ProgressionSlot[]; settings?: ProgressionSettings }
   | { type: "setSettings"; patch: Partial<ProgressionSettings> };
 
-export const MAX_PROGRESSION_LENGTH = PROGRESSION_OPTIMIZE_LIMITS.maxLayers;
+/** A progression from a full song can be long; the optimizer works on segments of this size. */
+export const MAX_OPTIMIZE_SEGMENT = PROGRESSION_OPTIMIZE_LIMITS.maxLayers;
+export const MAX_PROGRESSION_LENGTH = 128;
 
 export const DEFAULT_PROGRESSION_SETTINGS: ProgressionSettings = {
   voicingsPerChord: 8,
@@ -39,6 +49,7 @@ export const DEFAULT_PROGRESSION_SETTINGS: ProgressionSettings = {
   maxFretSpan: 4,
   minNotes: 4,
   pathLimit: 3,
+  segmentStart: 0,
 };
 
 export const INITIAL_PROGRESSION_STATE: ProgressionState = {
@@ -85,8 +96,25 @@ export function progressionReducer(state: ProgressionState, action: ProgressionA
         nextId: state.nextId + chords.length,
       };
     }
+    case "revert":
+      return {
+        ...state,
+        slots: state.slots.map((slot) =>
+          slot.id === action.id && slot.source
+            ? { ...slot, root: slot.source.detected.root, quality: slot.source.detected.quality }
+            : slot),
+      };
     case "clear":
-      return { ...state, slots: [] };
+      return { ...state, slots: [], settings: { ...state.settings, segmentStart: 0 } };
+    case "load": {
+      const slots = action.slots.slice(0, MAX_PROGRESSION_LENGTH);
+      // Re-key so ids stay unique after loading saved or extracted chords.
+      return {
+        settings: action.settings ?? state.settings,
+        slots: slots.map((slot, i) => ({ ...slot, id: `slot-${state.nextId + i}` })),
+        nextId: state.nextId + slots.length,
+      };
+    }
     case "setSettings":
       return { ...state, settings: { ...state.settings, ...action.patch } };
   }
@@ -102,7 +130,15 @@ export function candidatesPerChord(requested: number, chordCount: number): numbe
   return Math.max(1, Math.min(requested, maxCandidatesPerLayer, fairShare));
 }
 
+/** The chords the optimizer runs on: all of them, or a MAX_OPTIMIZE_SEGMENT-long window. */
+export function optimizeSegment(state: Pick<ProgressionState, "slots" | "settings">): { start: number; slots: ProgressionSlot[] } {
+  const maxStart = Math.max(0, state.slots.length - MAX_OPTIMIZE_SEGMENT);
+  const start = Math.min(Math.max(0, state.settings.segmentStart), maxStart);
+  return { start, slots: state.slots.slice(start, start + MAX_OPTIMIZE_SEGMENT) };
+}
+
 /** Stable identity of the request inputs, used to flag results as stale after edits. */
 export function progressionRequestKey(state: Pick<ProgressionState, "slots" | "settings">): string {
-  return JSON.stringify({ chords: state.slots.map(({ root, quality }) => [root, quality]), settings: state.settings });
+  const { start, slots } = optimizeSegment(state);
+  return JSON.stringify({ chords: slots.map(({ root, quality }) => [root, quality]), start, settings: state.settings });
 }
