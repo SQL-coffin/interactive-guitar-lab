@@ -1,7 +1,7 @@
 import { useId } from "react";
 import type { ChordQuality } from "@/services";
 import { displaySpelling } from "@/lib/roots";
-import { qualityLabel } from "@/lib/qualities";
+import { groupQualities, qualityLabel } from "@/lib/qualities";
 import { ROOT_SPELLINGS } from "./chordOptions";
 import styles from "./Progression.module.css";
 
@@ -38,7 +38,11 @@ export function ChordPicker({ root, quality, qualities, onChange, labelPrefix = 
             if (next) onChange({ quality: next });
           }}
         >
-          {qualities.map((q) => <option key={q} value={q}>{qualityLabel(q)}</option>)}
+          {groupQualities(qualities).map((group) => (
+            <optgroup key={group.id} label={group.label}>
+              {group.qualities.map((q) => <option key={q} value={q}>{qualityLabel(q)}</option>)}
+            </optgroup>
+          ))}
         </select>
       </label>
     </div>

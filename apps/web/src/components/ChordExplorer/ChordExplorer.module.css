@@ -32,6 +32,22 @@
   gap: 6px;
 }
 
+.qualityGroups {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.qualitySection {
+  display: grid;
+  gap: 4px;
+}
+
+.qualitySectionLabel {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 .rootTile,
 .qualityTile {
   position: relative;

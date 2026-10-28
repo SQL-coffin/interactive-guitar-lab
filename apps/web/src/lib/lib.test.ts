@@ -61,6 +61,6 @@ describe("labels", () => {
   });
   it("falls back to the raw id for unknown qualities", () => {
     expect(qualityLabel("dominant7")).toBe("Dominant 7");
-    expect(qualityLabel("add9" as never)).toBe("add9");
+    expect(qualityLabel("add11" as never)).toBe("add11");
   });
 });
