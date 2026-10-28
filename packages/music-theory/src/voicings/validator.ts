@@ -56,8 +56,8 @@ export function validateVoicing(
       errors.push("The selected root string must play the chord root.");
     }
   }
-  // A missing chord tone is permitted for shell voicings, unless the search explicitly requests all tones.
-  if ((options as VoicingSearchOptions & { requireAllTones?: boolean }).requireAllTones && missing.length) {
+  // A missing chord tone is permitted for shell voicings unless all tones are required.
+  if (options.requireAllTones && missing.length) {
     errors.push(`Missing chord tones: ${missing.map((tone) => tone.degree).join(", ")}.`);
   }
   return { valid: errors.length === 0, errors };
