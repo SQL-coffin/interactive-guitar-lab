@@ -1,0 +1,20 @@
+{
+  "name": "interactive-guitar-theory-lab",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Interactive guitar music theory learning lab",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
