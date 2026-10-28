@@ -6,6 +6,8 @@ export interface AudioWorkerClientOptions {
   filename: string;
   windowSeconds?: number;
   timeoutMs?: number;
+  /** Aborts the worker request early, e.g. when the HTTP client that started it disconnects. */
+  signal?: AbortSignal;
 }
 
 export interface AudioFeatureResponse {
@@ -127,7 +129,7 @@ export async function extractAudioFeatures(
     response = await fetch(endpoint, {
       method: "POST",
       body: form,
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown network error.";

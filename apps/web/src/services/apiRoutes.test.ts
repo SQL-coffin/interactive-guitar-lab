@@ -109,6 +109,47 @@ describe("Next.js backend API routes", () => {
       .toEqual(["AMaj7", "F#m7"]);
   });
 
+  it("cancels the worker request when the client disconnects", async () => {
+    let workerSignal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      workerSignal = init?.signal ?? undefined;
+      workerSignal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    })));
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const client = new AbortController();
+    const form = new FormData();
+    form.append("file", new File(["audio"], "song.wav", { type: "audio/wav" }));
+    const pending = postAudioAnalysis(new Request("http://localhost/api/audio-analysis", {
+      method: "POST",
+      body: form,
+      signal: client.signal,
+    }));
+    await vi.waitFor(() => expect(workerSignal).toBeDefined());
+    client.abort();
+    const response = await pending;
+    expect(workerSignal!.aborted).toBe(true);
+    expect(response.status).toBe(502);
+    // A client cancel is not a worker outage, so it is not logged as one.
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
+  });
+
+  it("logs worker outages server-side without exposing configuration", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("fetch failed"); }));
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const form = new FormData();
+    form.append("file", new File(["audio"], "song.wav", { type: "audio/wav" }));
+    const response = await postAudioAnalysis(new Request("http://localhost/api/audio-analysis", { method: "POST", body: form }));
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: { code: "internal_error", message: "Audio analysis worker is unavailable or failed." } });
+    expect(errors).toHaveBeenCalledTimes(1);
+    const logged = String(errors.mock.calls[0]![0]);
+    expect(logged).toContain("[audio-analysis] worker failure");
+    expect(logged).toContain("fetch failed");
+    expect(logged).not.toContain("127.0.0.1");
+    errors.mockRestore();
+  });
+
   it("rejects malformed audio-analysis form data and options", async () => {
     const noFile = await postAudioAnalysis(new Request("http://localhost/api/audio-analysis", {
       method: "POST",

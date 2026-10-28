@@ -131,12 +131,18 @@ export async function POST(request: Request): Promise<Response> {
       filename: uploaded.name || "audio-upload",
       ...(windowSeconds === undefined ? {} : { windowSeconds }),
       chordAnalysis,
+      // Stop the worker request when the browser cancels or disconnects.
+      signal: request.signal,
     });
     return Response.json(result);
   } catch (error) {
     if (error instanceof AudioWorkerError) {
       if (error.statusCode === 400) return apiError(400, "invalid_request", error.message);
       if (error.statusCode === 413) return apiError(413, "invalid_request", error.message);
+      if (!request.signal.aborted) {
+        // Server-side record of worker outages; the message never contains the worker URL or env values.
+        console.error(`[audio-analysis] worker failure (status ${error.statusCode ?? "none"}): ${error.message}`);
+      }
       return apiError(502, "internal_error", "Audio analysis worker is unavailable or failed.");
     }
     return apiErrorFromException(error);

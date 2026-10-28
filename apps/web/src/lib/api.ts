@@ -18,6 +18,8 @@ export function apiErrorFromException(error: unknown): Response {
   if (error instanceof TypeError || error instanceof RangeError) {
     return apiError(400, "invalid_request", error.message);
   }
+  // The client only sees a generic message, so keep the real cause in the server log.
+  console.error("[api] unexpected error:", error);
   return apiError(500, "internal_error", "An unexpected server error occurred.");
 }
 
