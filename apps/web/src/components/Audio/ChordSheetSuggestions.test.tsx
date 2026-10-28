@@ -115,7 +115,7 @@ describe("ChordSheetSuggestions", () => {
 
     expect(screen.getByText(/already has a different edit/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Apply to progression" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Dismiss" }));
+    await user.click(screen.getByRole("button", { name: "Hide for now" }));
     expect(screen.queryByRole("region", { name: "Review possible chord glitches" })).not.toBeInTheDocument();
     expect(onApplySuggestion).not.toHaveBeenCalled();
   });

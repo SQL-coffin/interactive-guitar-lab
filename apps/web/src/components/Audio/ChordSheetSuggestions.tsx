@@ -5,7 +5,6 @@ import type { ChordQuality } from "@/services";
 import type { ChordSheetRefinementSuggestion } from "@interactive-guitar-lab/audio-analysis";
 import { formatSeconds } from "@/lib/audioTimeline";
 import { displaySpelling } from "@/lib/roots";
-import { qualityLabel } from "@/lib/qualities";
 import type { AnalysisSession } from "@/state/lab/model";
 import { isCorrected } from "@/state/lab/model";
 import type { ProgressionSlot } from "@/state/progressionState";
@@ -99,12 +98,14 @@ export function ChordSheetSuggestions({
                   variant="ghost"
                   onClick={() => setHiddenIds((current) => [...current, suggestion.suggestionId])}
                 >
-                  Dismiss
+                  Hide for now
                 </Button>
               </div>
               {!target ? (
                 <p className={styles.refinementNote}>
-                  No exact matching chord exists in the linked progression, so this hint can be inspected but not applied automatically.
+                  {linkedSlots
+                    ? "No exact matching chord exists in the linked progression, so this hint can be inspected but not applied automatically."
+                    : "Create a progression from this path to apply a hint after checking its source window."}
                 </p>
               ) : null}
             </li>

@@ -4,11 +4,19 @@ import { suggestChordSheetRefinements } from "./chord-sheet-refinement.js";
 import type { ChordCandidate, ChordInferenceResult } from "./types.js";
 
 function frame(startSeconds: number, endSeconds: number, symbol: string): ChordInferenceResult {
+  const root = symbol.match(/^[A-G](?:[#b])?/i)?.[0] ?? "C";
+  const quality: ChordCandidate["quality"] = /m7$/i.test(symbol)
+    ? "minor7"
+    : /m$/i.test(symbol)
+      ? "minor"
+      : /7$/i.test(symbol)
+        ? "dominant7"
+        : "major";
   const candidate: ChordCandidate = {
     symbol,
-    root: symbol[0]!,
+    root,
     rootPitchClass: 0,
-    quality: "major",
+    quality,
     confidence: 0.8,
     score: 0.8,
     evidence: {
@@ -38,7 +46,7 @@ describe("suggestChordSheetRefinements", () => {
       currentChordSymbol: "D7",
       suggestedChordSymbol: "Am",
       suggestedRoot: "A",
-      suggestedQuality: "major",
+      suggestedQuality: "minor",
       durationSeconds: expect.closeTo(0.1),
       contextEventIndexes: [0, 2],
       sourceFrameIndexes: [1],
