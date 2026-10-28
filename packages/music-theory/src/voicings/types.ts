@@ -22,6 +22,8 @@ export interface VoicingSearchOptions {
   allowMutedStrings?: boolean;
   /** Require the root to be present. Defaults to true. */
   requireRoot?: boolean;
+  /** Require every distinct chord tone to be present. Defaults to false for shell voicings. */
+  requireAllTones?: boolean;
   /** Number of sorted results returned. Defaults to 50. */
   limit?: number;
 }
