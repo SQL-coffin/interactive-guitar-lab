@@ -74,6 +74,19 @@ describe("audio worker HTTP client", () => {
     })).rejects.toThrow(RangeError);
   });
 
+  it("aborts the worker request when the caller's signal aborts", async () => {
+    let workerSignal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      workerSignal = init?.signal ?? undefined;
+      workerSignal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    })));
+    const caller = new AbortController();
+    const pending = extractAudioFeatures(new Blob(["audio"]), { baseUrl: "http://127.0.0.1:8010", filename: "a.wav", signal: caller.signal });
+    caller.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AudioWorkerError" });
+    expect(workerSignal?.aborted).toBe(true);
+  });
+
   it("runs the complete mocked audio-to-chord-to-voicing pipeline", async () => {
     const aMaj7 = Array.from({ length: 12 }, (_, i) => [9, 1, 4, 8].includes(i) ? 1 : 0);
     const fSharpMinor7 = Array.from({ length: 12 }, (_, i) => [6, 9, 1, 4].includes(i) ? 1 : 0);
