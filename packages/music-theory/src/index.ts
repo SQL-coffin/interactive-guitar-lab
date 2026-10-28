@@ -3,3 +3,4 @@ export * from "./intervals/index.js";
 export * from "./chords/index.js";
 export * from "./fretboard/index.js";
 export * from "./voicings/index.js";
+export * from "./progression-optimizer/index.js";
