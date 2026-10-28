@@ -8,6 +8,11 @@ import {
   type Voicing,
   type VoicingSearchOptions,
 } from "@interactive-guitar-lab/music-theory";
+import {
+  assertAnalysisOptionsWithinBudget,
+  assertFramesWithinBudget,
+  DEFAULT_AUDIO_PROGRESSION_LIMIT,
+} from "./budget.js";
 import { inferChordCandidates } from "./infer-chords.js";
 import type { ChordInferenceResult, ChordInferenceOptions, ChromaFrame } from "./types.js";
 
@@ -57,7 +62,12 @@ function validateOptions(input: ChromaProgressionAnalysisOptions): Required<
   if (!Number.isFinite(bassRootBonus) || bassRootBonus < 0 || bassRootBonus > 0.25) {
     throw new RangeError("bassRootBonus must be between 0 and 0.25.");
   }
+  assertAnalysisOptionsWithinBudget(chordCandidateLimit * voicingsPerChord, progressionLimit(input));
   return { chordCandidateLimit, voicingsPerChord, chordQualities, bassRootBonus };
+}
+
+function progressionLimit(input: ChromaProgressionAnalysisOptions): number {
+  return input.progressionOptions?.limit ?? DEFAULT_AUDIO_PROGRESSION_LIMIT;
 }
 
 /**
@@ -70,6 +80,8 @@ export function analyzeChromaProgression(
 ): ChromaProgressionAnalysisResult {
   if (frames.length === 0) throw new RangeError("At least one chroma frame is required.");
   const options = validateOptions(input);
+  // Reject oversized work before any voicing search or optimization starts.
+  assertFramesWithinBudget(frames.length, options.chordCandidateLimit * options.voicingsPerChord, progressionLimit(input));
   const inferenceOptions: ChordInferenceOptions = {
     limit: options.chordCandidateLimit,
     qualities: options.chordQualities,

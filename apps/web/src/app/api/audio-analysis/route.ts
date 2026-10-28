@@ -1,5 +1,7 @@
 import {
   analyzeAudioForChords,
+  AUDIO_ANALYSIS_LIMITS,
+  AudioAnalysisBudgetError,
   AudioWorkerError,
   type ChromaProgressionAnalysisOptions,
 } from "@interactive-guitar-lab/audio-analysis";
@@ -15,8 +17,11 @@ import {
   validateProgressionOptimizationOptions,
   validateVoicingSearchOptions,
 } from "@/lib/api";
+import { readBoundedFormData } from "@/lib/boundedBody";
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+/** File limit plus room for multipart boundaries and the small windowSeconds/options fields. */
+const MAX_REQUEST_BYTES = MAX_UPLOAD_BYTES + 1024 * 1024;
 const ANALYSIS_OPTION_KEYS = new Set([
   "chordCandidateLimit",
   "voicingsPerChord",
@@ -75,18 +80,27 @@ function parseAnalysisOptions(value: unknown): ChromaProgressionAnalysisOptions 
     parsed.voicingSearchOptions = searchOptions;
   }
   if (value.progressionOptions !== undefined) {
-    parsed.progressionOptions = validateProgressionOptimizationOptions(value.progressionOptions, 100, "options.progressionOptions");
+    parsed.progressionOptions = validateProgressionOptimizationOptions(
+      value.progressionOptions,
+      AUDIO_ANALYSIS_LIMITS.maxProgressionLimit,
+      "options.progressionOptions",
+    );
+  }
+  // Each parameter can be in range while their product is not; check it before calling the worker.
+  const candidatesPerFrame = (parsed.chordCandidateLimit ?? 3) * (parsed.voicingsPerChord ?? 5);
+  if (candidatesPerFrame > AUDIO_ANALYSIS_LIMITS.maxCandidatesPerFrame) {
+    throw new RangeError(
+      `options.chordCandidateLimit × options.voicingsPerChord must be at most ${AUDIO_ANALYSIS_LIMITS.maxCandidatesPerFrame} (requested ${candidatesPerFrame}).`,
+    );
   }
   return parsed;
 }
 
 export async function POST(request: Request): Promise<Response> {
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch {
-    return apiError(400, "invalid_request", "Request body must be multipart form data.");
-  }
+  // Enforce the size limit while reading, before any multipart parsing.
+  const body = await readBoundedFormData(request, MAX_REQUEST_BYTES);
+  if (!body.ok) return body.response;
+  const { form } = body;
 
   const uploaded = form.get("file");
   if (uploaded === null || typeof uploaded === "string") {
@@ -136,6 +150,9 @@ export async function POST(request: Request): Promise<Response> {
     });
     return Response.json(result);
   } catch (error) {
+    if (error instanceof AudioAnalysisBudgetError) {
+      return apiError(413, "invalid_request", error.message);
+    }
     if (error instanceof AudioWorkerError) {
       if (error.statusCode === 400) return apiError(400, "invalid_request", error.message);
       if (error.statusCode === 413) return apiError(413, "invalid_request", error.message);
