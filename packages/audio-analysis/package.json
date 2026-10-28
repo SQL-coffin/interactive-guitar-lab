@@ -1,0 +1,12 @@
+{
+  "name": "@interactive-guitar-lab/audio-analysis",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@interactive-guitar-lab/music-theory": "0.1.0"
+  }
+}

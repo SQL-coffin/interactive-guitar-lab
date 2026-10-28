@@ -9,16 +9,19 @@ interface VoicingCardProps {
   voicing: Voicing;
   rank: number;
   selected: boolean;
+  comparing?: boolean;
   labelMode: LabelMode;
   openStringNames: ReadonlyMap<number, string>;
   onSelect: () => void;
+  /** Omit to hide the compare action. */
+  onCompare?: (() => void) | undefined;
 }
 
-export function VoicingCard({ voicing, rank, selected, labelMode, openStringNames, onSelect }: VoicingCardProps) {
+export function VoicingCard({ voicing, rank, selected, comparing = false, labelMode, openStringNames, onSelect, onCompare }: VoicingCardProps) {
   const tab = voicingTab(voicing);
   const position = voicing.lowestFret === 0 ? "Open position" : `Frets ${voicing.lowestFret}–${voicing.highestFret}`;
   return (
-    <article className={styles.card} data-selected={selected} aria-label={`Voicing ${rank}: ${tab}`}>
+    <article className={styles.card} data-selected={selected} data-comparing={comparing} aria-label={`Voicing ${rank}: ${tab}`}>
       <header className={styles.cardHeader}>
         <span className={styles.rank}>#{rank}</span>
         <code className={styles.tab} title="Tab, low string first (x = muted)">{tab}</code>
@@ -47,9 +50,22 @@ export function VoicingCard({ voicing, rank, selected, labelMode, openStringName
         <p className={styles.missing}>Omits {voicing.missingDegrees.join(", ")}</p>
       ) : null}
 
-      <button type="button" className={styles.select} aria-pressed={selected} onClick={onSelect}>
-        {selected ? "Shown on fretboard" : "Show on fretboard"}
-      </button>
+      <div className={styles.cardActions}>
+        <button type="button" className={styles.select} aria-pressed={selected} onClick={onSelect}>
+          {selected ? "Shown on fretboard" : "Show on fretboard"}
+        </button>
+        {onCompare && !selected ? (
+          <button
+            type="button"
+            className={styles.compare}
+            aria-pressed={comparing}
+            aria-label={comparing ? `Stop comparing voicing ${rank}` : `Compare voicing ${rank} with the shown voicing`}
+            onClick={onCompare}
+          >
+            {comparing ? "Comparing" : "Compare"}
+          </button>
+        ) : null}
+      </div>
     </article>
   );
 }

@@ -8,6 +8,7 @@
     "./pitch": "./src/pitch/index.ts",
     "./intervals": "./src/intervals/index.ts",
     "./chords": "./src/chords/index.ts",
-    "./fretboard": "./src/fretboard/index.ts"
+    "./fretboard": "./src/fretboard/index.ts",
+    "./progression-optimizer": "./src/progression-optimizer/index.ts"
   }
 }

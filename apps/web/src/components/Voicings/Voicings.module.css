@@ -153,3 +153,186 @@
     gap: 0;
   }
 }
+
+/* ---------- Voicing breakdown ---------- */
+.breakdown {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.breakdownFacts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+  font-size: 0.875rem;
+}
+
+.breakdownFacts strong {
+  font-weight: 650;
+}
+
+.degreeChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 6px;
+  margin-right: 4px;
+  border-radius: 999px;
+  background: var(--deg);
+  color: var(--deg-fg);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.omits {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.breakdownTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.breakdownTable th,
+.breakdownTable td {
+  text-align: left;
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.breakdownTable thead th {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.breakdownTable tbody th {
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.breakdownTable tr[data-muted="true"] td,
+.breakdownTable tr[data-muted="true"] th {
+  color: var(--text-muted);
+}
+
+.cardActions {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-1);
+}
+
+@media (max-width: 720px) {
+  .breakdown {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- Transition summary ---------- */
+.transition {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.transition[data-compact="true"] {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.transitionTitle {
+  font-size: 0.9rem;
+}
+
+.transitionStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.transitionStats strong {
+  color: var(--text);
+}
+
+.transitionStrings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.transitionStrings li {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 52px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  font-size: 0.75rem;
+}
+
+.transitionStrings li[data-change="held"] {
+  border-color: var(--deg-fifth);
+  background: color-mix(in srgb, var(--deg-fifth) 12%, var(--surface));
+}
+
+.transitionStrings li[data-change="moved"] {
+  border-color: var(--deg-third);
+}
+
+.transitionStrings li[data-change="muted"],
+.transitionStrings li[data-change="unmuted"] {
+  border-color: var(--danger);
+  border-style: dashed;
+}
+
+.transitionString {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.transitionFrets {
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.card[data-comparing="true"] {
+  border-style: dashed;
+  border-color: var(--text-muted);
+}
+
+.compare {
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.compare[aria-pressed="true"] {
+  border-color: var(--text);
+  color: var(--text);
+  background: var(--surface-sunken);
+}

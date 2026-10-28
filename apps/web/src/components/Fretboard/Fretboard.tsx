@@ -15,6 +15,9 @@ export interface FretboardProps {
   maxFret: number;
   chord?: BuiltChord | undefined;
   voicing?: Voicing | undefined;
+  /** A second shape drawn as hollow markers, e.g. the previous chord or an alternative voicing. */
+  compareVoicing?: Voicing | undefined;
+  compareLabel?: string | undefined;
   labelMode: LabelMode;
   selection: FretboardSelection;
   onSelectionChange: (action: FretboardSelectionAction) => void;
@@ -27,6 +30,7 @@ interface CellModel {
   position: FretboardPosition;
   tone: ChordTone | undefined;
   inVoicing: boolean;
+  inCompare: boolean;
   marked: boolean;
   revealed: boolean;
 }
@@ -37,6 +41,8 @@ export function Fretboard({
   maxFret,
   chord,
   voicing,
+  compareVoicing,
+  compareLabel = "comparison voicing",
   labelMode,
   selection,
   onSelectionChange,
@@ -62,11 +68,12 @@ export function Fretboard({
         position,
         tone: toneByPitch.get(position.pitchClass),
         inVoicing: voicing?.strings[string - 1]?.fret === fret,
+        inCompare: compareVoicing?.strings[string - 1]?.fret === fret,
         marked: selection.markers.includes(markerKey(string, fret)),
         revealed: selection.string === string || selection.fret === fret,
       };
     },
-    [byKey, toneByPitch, voicing, selection],
+    [byKey, toneByPitch, voicing, compareVoicing, selection],
   );
 
   const focusCell = (string: number, fret: number) => {
@@ -128,6 +135,7 @@ export function Fretboard({
         {strings.map((string) => {
           const label = stringLabel(string, stringCount, openNames.get(string));
           const mutedInVoicing = voicing !== undefined && voicing.strings[string - 1] === null;
+          const mutedInCompare = compareVoicing !== undefined && compareVoicing.strings[string - 1] === null;
           return (
             <div
               role="row"
@@ -148,6 +156,7 @@ export function Fretboard({
                 >
                   <span aria-hidden="true">{openNames.get(string) ?? string}</span>
                   {mutedInVoicing ? <span className={styles.muted} aria-hidden="true">×</span> : null}
+                  {mutedInCompare && !mutedInVoicing ? <span className={styles.mutedCompare} aria-hidden="true">×</span> : null}
                 </button>
               </div>
               {frets.map((fret) => {
@@ -172,7 +181,7 @@ export function Fretboard({
                         tabIndex={isActive ? 0 : -1}
                         className={styles.cellButton}
                         aria-pressed={cell.marked}
-                        aria-label={cellLabel(cell, label, chordName)}
+                        aria-label={cellLabel(cell, label, chordName, compareLabel)}
                         onFocus={() => setActive({ string, fret })}
                         onClick={() => onSelectionChange({ type: "toggleMarker", string, fret })}
                       >
@@ -206,28 +215,31 @@ export function Fretboard({
 }
 
 function Marker({ cell, labelMode }: { cell: CellModel; labelMode: LabelMode }) {
-  const { position, tone, inVoicing, marked, revealed } = cell;
-  if (!inVoicing && !tone && !marked && !revealed) return null;
+  const { position, tone, inVoicing, inCompare, marked, revealed } = cell;
+  if (!inVoicing && !inCompare && !tone && !marked && !revealed) return null;
   const text = labelMode === "degree" && tone ? tone.degree : displaySpelling(tone?.spelling ?? position.noteName);
-  const variant = inVoicing ? "voicing" : tone ? "chordTone" : marked ? "marked" : "revealed";
+  const variant = inVoicing ? "voicing" : inCompare ? "compare" : tone ? "chordTone" : marked ? "marked" : "revealed";
   return (
     <span
       aria-hidden="true"
       className={`${styles.marker} ${tone ? `deg-${degreeFamily(tone.degree)}` : ""}`}
       data-variant={variant}
       data-marked={marked}
+      data-root={tone?.degree === "1"}
+      data-shared={inVoicing && inCompare}
     >
       {text}
     </span>
   );
 }
 
-function cellLabel(cell: CellModel, stringName: string, chordName: string | undefined): string {
-  const { position, tone, inVoicing } = cell;
+function cellLabel(cell: CellModel, stringName: string, chordName: string | undefined, compareLabel: string): string {
+  const { position, tone, inVoicing, inCompare } = cell;
   const parts = [
     `${stringName}, ${position.fret === 0 ? "open" : `fret ${position.fret}`}: ${displaySpelling(tone?.spelling ?? position.noteName)}`,
   ];
   if (tone && chordName) parts.push(`degree ${tone.degree} of ${chordName}`);
   if (inVoicing) parts.push("in selected voicing");
+  if (inCompare) parts.push(`in ${compareLabel}`);
   return parts.join(", ");
 }
