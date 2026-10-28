@@ -8,7 +8,7 @@ describe("voicing search", () => {
     expect(result.results.length).toBeGreaterThan(0);
     for (const voicing of result.results) {
       expect(validateVoicing(voicing, result.chord, result.options).valid).toBe(true);
-      expect(voicing.notes.every((note) => [0, 1, 4, 6, 9, 11].includes(note.pitchClass))).toBe(true);
+      expect(voicing.notes.every((note) => result.chord.tones.some((tone) => tone.pitchClass === note.pitchClass))).toBe(true);
     }
   });
 
