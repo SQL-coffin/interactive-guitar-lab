@@ -11,6 +11,7 @@ import {
   EXAMPLE_PROGRESSION,
   INITIAL_PROGRESSION_STATE,
   MAX_PROGRESSION_LENGTH,
+  candidatesPerChord,
   progressionReducer,
   progressionRequestKey,
 } from "@/state/progressionState";
@@ -46,6 +47,7 @@ export function ProgressionBuilder() {
   const opt = optimizer.state;
   const shownRun = opt.status === "success" ? opt.run : opt.status === "loading" ? opt.previous : undefined;
   const setSetting = (patch: Partial<typeof settings>) => dispatch({ type: "setSettings", patch });
+  const effectivePerChord = candidatesPerChord(settings.voicingsPerChord, slots.length);
 
   return (
     <>
@@ -170,6 +172,12 @@ export function ProgressionBuilder() {
               {[1, 3, 5].map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
+          {effectivePerChord < settings.voicingsPerChord ? (
+            <p className={styles.hint} role="note">
+              With {slots.length} chords the optimizer accepts at most {effectivePerChord} candidates per chord, so{" "}
+              {effectivePerChord} will be searched.
+            </p>
+          ) : null}
           <div className={styles.settingsActions}>
             {opt.status === "loading" ? (
               <Button variant="ghost" onClick={optimizer.cancel}>Cancel</Button>

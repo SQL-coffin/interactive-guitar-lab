@@ -1,4 +1,4 @@
-import type { ChordQuality } from "@/services";
+import { PROGRESSION_OPTIMIZE_LIMITS, type ChordQuality } from "@/services";
 
 export interface ProgressionSlot {
   id: string;
@@ -31,7 +31,7 @@ export type ProgressionAction =
   | { type: "clear" }
   | { type: "setSettings"; patch: Partial<ProgressionSettings> };
 
-export const MAX_PROGRESSION_LENGTH = 12;
+export const MAX_PROGRESSION_LENGTH = PROGRESSION_OPTIMIZE_LIMITS.maxLayers;
 
 export const DEFAULT_PROGRESSION_SETTINGS: ProgressionSettings = {
   voicingsPerChord: 8,
@@ -90,6 +90,16 @@ export function progressionReducer(state: ProgressionState, action: ProgressionA
     case "setSettings":
       return { ...state, settings: { ...state.settings, ...action.patch } };
   }
+}
+
+/**
+ * Candidates requested per chord so the whole optimize request stays within the server's
+ * per-layer and total-candidate limits (e.g. 12 chords → at most 16 each).
+ */
+export function candidatesPerChord(requested: number, chordCount: number): number {
+  const { maxCandidatesPerLayer, maxTotalCandidates } = PROGRESSION_OPTIMIZE_LIMITS;
+  const fairShare = Math.floor(maxTotalCandidates / Math.max(1, chordCount));
+  return Math.max(1, Math.min(requested, maxCandidatesPerLayer, fairShare));
 }
 
 /** Stable identity of the request inputs, used to flag results as stale after edits. */

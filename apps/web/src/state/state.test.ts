@@ -80,3 +80,16 @@ describe("progressionReducer", () => {
     expect(progressionRequestKey(progressionReducer(a, { type: "setSettings", patch: { maxFret: 5 } }))).not.toBe(progressionRequestKey(a));
   });
 });
+
+import { candidatesPerChord } from "./progressionState";
+
+describe("candidatesPerChord", () => {
+  it("keeps requests within the optimize route's per-layer and total limits", () => {
+    expect(candidatesPerChord(8, 4)).toBe(8);
+    expect(candidatesPerChord(20, 9)).toBe(20);
+    expect(candidatesPerChord(20, 10)).toBe(19);
+    expect(candidatesPerChord(20, 12)).toBe(16);
+    expect(candidatesPerChord(40, 1)).toBe(32);
+    expect(candidatesPerChord(8, 0)).toBe(8);
+  });
+});

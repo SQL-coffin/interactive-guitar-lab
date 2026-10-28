@@ -8,7 +8,7 @@ import {
   type GuitarLabService,
   type ProgressionOptimizationResult,
 } from "@/services";
-import type { ProgressionSettings, ProgressionSlot } from "./progressionState";
+import { candidatesPerChord, type ProgressionSettings, type ProgressionSlot } from "./progressionState";
 
 export interface ProgressionRun {
   /** Request key the result was computed for. */
@@ -48,6 +48,7 @@ export function useProgressionOptimizer(service: GuitarLabService) {
         previous: current.status === "success" ? current.run : current.status === "loading" ? current.previous : undefined,
       }));
 
+      const perChord = candidatesPerChord(settings.voicingsPerChord, slots.length);
       try {
         const searches = await Promise.all(
           slots.map((slot) =>
@@ -59,7 +60,7 @@ export function useProgressionOptimizer(service: GuitarLabService) {
                   maxFret: settings.maxFret,
                   maxFretSpan: settings.maxFretSpan,
                   minNotes: settings.minNotes,
-                  limit: settings.voicingsPerChord,
+                  limit: perChord,
                 },
               },
               { signal },
