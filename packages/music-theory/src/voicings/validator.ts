@@ -33,7 +33,7 @@ export function validateVoicing(
   const chordPitchClasses = new Set(chord.tones.map((tone) => tone.pitchClass));
   for (let i = 0; i < voicing.strings.length; i++) {
     const note = voicing.strings[i];
-    if (note === null) continue;
+    if (note === null || note === undefined) continue;
     if (note.string !== i + 1) errors.push("String entries must be ordered low to high and use 1-based string numbers.");
     if (note.fret < minFret || note.fret > maxFret) errors.push(`String ${i + 1} is outside the allowed fret range.`);
     if (!allowOpenStrings && note.fret === 0) errors.push("Open strings are not allowed.");
