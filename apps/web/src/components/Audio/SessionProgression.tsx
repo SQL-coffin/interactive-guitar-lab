@@ -10,6 +10,7 @@ import { useLab } from "@/state/lab/LabSessionProvider";
 import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
 import styles from "./Audio.module.css";
+import { ChordSheetSuggestions } from "./ChordSheetSuggestions";
 
 interface SessionProgressionProps {
   session: AnalysisSession;
@@ -20,7 +21,7 @@ interface SessionProgressionProps {
 
 /** Turns the chosen fingering path into a progression and shows the one linked to this session. */
 export function SessionProgression({ session, pathIndex, selectedFrame, onSelectWindow }: SessionProgressionProps) {
-  const { draft, createProgressionFromSession } = useLab();
+  const { draft, createProgressionFromSession, dispatchProgression } = useLab();
   const [notice, setNotice] = useState<string | null>(null);
   const detectedCount = extractChordSequence(session.result, pathIndex).length;
   const linked = draft.sessionId === session.id && draft.progression.slots.length > 0 ? draft.progression.slots : null;
@@ -36,6 +37,7 @@ export function SessionProgression({ session, pathIndex, selectedFrame, onSelect
   };
 
   return (
+    <>
     <Panel
       title="Progression from this analysis"
       titleId="session-progression-title"
@@ -95,5 +97,12 @@ export function SessionProgression({ session, pathIndex, selectedFrame, onSelect
         </p>
       )}
     </Panel>
+    <ChordSheetSuggestions
+      session={session}
+      linkedSlots={linked}
+      onSelectWindow={onSelectWindow}
+      onApplySuggestion={(slotId, root, quality) => dispatchProgression({ type: "update", id: slotId, patch: { root, quality } })}
+    />
+    </>
   );
 }

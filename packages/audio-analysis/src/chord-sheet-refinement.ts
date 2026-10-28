@@ -10,13 +10,15 @@ export interface ChordSheetRefinementSuggestion {
   reason: "short-interstitial-event";
   currentChordSymbol: string;
   suggestedChordSymbol: string;
+  suggestedRoot: string;
+  suggestedQuality: ChordSheetEvent["quality"];
   durationSeconds: number;
   contextEventIndexes: [number, number];
   sourceFrameIndexes: number[];
 }
 
 export interface ChordSheetRefinementOptions {
-  /** Maximum event duration to flag for review; defaults to 0.18 seconds. */
+  /** Maximum event duration to flag for review; defaults to 0.55 seconds (about one 0.5-second analysis window). */
   maxDurationSeconds?: number;
   /** Maximum temporal gap at either side of the event; defaults to 0.05 seconds. */
   maxGapSeconds?: number;
@@ -34,7 +36,7 @@ export function suggestChordSheetRefinements(
   events: readonly ChordSheetEvent[],
   options: ChordSheetRefinementOptions = {},
 ): ChordSheetRefinementSuggestion[] {
-  const maxDurationSeconds = options.maxDurationSeconds ?? 0.18;
+  const maxDurationSeconds = options.maxDurationSeconds ?? 0.55;
   const maxGapSeconds = options.maxGapSeconds ?? 0.05;
 
   if (!Number.isFinite(maxDurationSeconds) || maxDurationSeconds <= 0 || maxDurationSeconds > 1) {
@@ -79,6 +81,8 @@ export function suggestChordSheetRefinements(
       reason: "short-interstitial-event",
       currentChordSymbol: current.chordSymbol,
       suggestedChordSymbol: previous.chordSymbol,
+      suggestedRoot: previous.root,
+      suggestedQuality: previous.quality,
       durationSeconds,
       contextEventIndexes: [index - 1, index + 1],
       sourceFrameIndexes: [...current.sourceFrameIndexes],

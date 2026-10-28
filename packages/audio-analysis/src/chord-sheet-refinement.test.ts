@@ -37,6 +37,8 @@ describe("suggestChordSheetRefinements", () => {
       reason: "short-interstitial-event",
       currentChordSymbol: "D7",
       suggestedChordSymbol: "Am",
+      suggestedRoot: "A",
+      suggestedQuality: "major",
       durationSeconds: expect.closeTo(0.1),
       contextEventIndexes: [0, 2],
       sourceFrameIndexes: [1],
@@ -47,8 +49,8 @@ describe("suggestChordSheetRefinements", () => {
   it("does not suggest a real longer event or a transition without matching neighbors", () => {
     const longer = buildChordSheet([
       frame(0, 0.1, "Am"),
-      frame(0.1, 0.5, "D7"),
-      frame(0.5, 0.6, "Am"),
+      frame(0.1, 0.7, "D7"),
+      frame(0.7, 0.8, "Am"),
     ]);
     const differingNeighbors = buildChordSheet([
       frame(0, 0.1, "Am"),

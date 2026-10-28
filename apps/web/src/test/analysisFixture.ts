@@ -1,4 +1,4 @@
-import { analyzeChromaProgression } from "@interactive-guitar-lab/audio-analysis";
+import { analyzeChromaProgression, buildChordSheet } from "@interactive-guitar-lab/audio-analysis";
 import type { AudioAnalysisResponse } from "@/services";
 
 const chroma = (pcs: number[]) => Array.from({ length: 12 }, (_, pc) => (pcs.includes(pc) ? 1 : 0));
@@ -9,8 +9,14 @@ const SILENT = chroma([]);
 /** Real backend (analyzeChromaProgression) output for C, C, silence, C, G, G (one-second windows). */
 export function analysisFixture(): AudioAnalysisResponse {
   const frames = [C, C, SILENT, C, G, G].map((values, i) => ({ startSeconds: i, endSeconds: i + 1, chroma: values, bassPitchClass: null }));
+  const audio = { schemaVersion: "1.0" as const, filename: "take.wav", durationSeconds: 6, sampleRate: 22050, windowSeconds: 1, rhythm: { tempoBpm: 90, beatTimesSeconds: [0.5, 1.2] } };
+  const chordAnalysis = analyzeChromaProgression(frames, { chordQualities: ["major", "minor"], progressionOptions: { limit: 2 } });
   return {
-    audio: { schemaVersion: "1.0", filename: "take.wav", durationSeconds: 6, sampleRate: 22050, windowSeconds: 1, rhythm: { tempoBpm: 90, beatTimesSeconds: [0.5, 1.2] } },
-    chordAnalysis: analyzeChromaProgression(frames, { chordQualities: ["major", "minor"], progressionOptions: { limit: 2 } }),
+    audio,
+    chordAnalysis,
+    chordSheet: buildChordSheet(chordAnalysis.frameResults, {
+      beatTimesSeconds: audio.rhythm.beatTimesSeconds,
+      tempoBpm: audio.rhythm.tempoBpm,
+    }),
   };
 }
