@@ -12,6 +12,7 @@ const DEFAULTS = {
   allowOpenStrings: true,
   allowMutedStrings: true,
   requireRoot: true,
+  requireAllTones: false,
   limit: 50,
 } as const;
 
