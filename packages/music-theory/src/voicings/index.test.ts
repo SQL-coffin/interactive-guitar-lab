@@ -20,6 +20,18 @@ describe("voicing search", () => {
     expect(result.results.every((voicing) => voicing.missingDegrees.length === 0)).toBe(true);
   });
 
+  it.each([
+    ["sus2", "Csus2"],
+    ["augmented", "Caug"],
+    ["diminished", "Cdim"],
+    ["add9", "Cadd9"],
+  ] as const)("searches voicings for the new %s quality", (quality, symbol) => {
+    const result = searchVoicings("C", quality, { maxFret: 7, limit: 2 });
+    expect(result.chord.symbol).toBe(symbol);
+    expect(result.results.length).toBeGreaterThan(0);
+    expect(result.results.every((voicing) => validateVoicing(voicing, result.chord, result.options).valid)).toBe(true);
+  });
+
   it("can constrain the root to a selected string", () => {
     const result = searchVoicings("A", "major7", { rootString: 5, maxFret: 12, limit: 10 });
     expect(result.results.length).toBeGreaterThan(0);
