@@ -1,0 +1,252 @@
+.scroller {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: var(--space-2);
+  /* Edge fade hints that the board scrolls on narrow screens. */
+  scrollbar-width: thin;
+}
+
+.grid {
+  --label-w: 44px;
+  --open-w: 52px;
+  --fret-w: minmax(48px, 1fr);
+  --row-h: 44px;
+  min-width: calc(var(--label-w) + var(--open-w) + var(--fret-count) * 48px);
+  user-select: none;
+}
+
+.row,
+.inlayRow {
+  display: grid;
+  grid-template-columns: var(--label-w) var(--open-w) repeat(var(--fret-count), var(--fret-w));
+}
+
+.headerRow {
+  height: 32px;
+}
+
+.corner {
+  min-width: 0;
+}
+
+.fretHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 4px;
+}
+
+.fretButton,
+.stringButton {
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 6px;
+  min-width: 28px;
+  min-height: 24px;
+}
+
+.fretButton:hover,
+.stringButton:hover {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+
+.fretButton[aria-pressed="true"],
+.stringButton[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.stringHeader {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 6px;
+  height: var(--row-h);
+}
+
+.stringButton {
+  position: relative;
+  font-size: 0.85rem;
+}
+
+.muted {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--danger);
+  font-weight: 800;
+}
+
+.cell {
+  position: relative;
+  height: var(--row-h);
+  background: var(--wood);
+  border-right: 2px solid var(--fret-wire);
+}
+
+.cell[data-open="true"] {
+  background: var(--surface-sunken);
+  border-right: 6px solid var(--nut);
+  box-shadow: inset -1px 0 0 var(--border-strong);
+}
+
+.row:nth-child(2) .cell {
+  border-top: 3px solid var(--wood-edge);
+}
+
+.row:nth-last-child(2) .cell {
+  border-bottom: 3px solid var(--wood-edge);
+}
+
+.row:nth-child(2) .cell[data-open="true"],
+.row:nth-last-child(2) .cell[data-open="true"] {
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+}
+
+/* The string itself */
+.cell::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--string-weight, 1px);
+  transform: translateY(-50%);
+  background: var(--string);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.cell[data-open="true"]::before {
+  background: var(--border-strong);
+  box-shadow: none;
+}
+
+.row[data-highlighted="true"] .cell,
+.cell[data-column-highlighted="true"] {
+  background-image: linear-gradient(var(--highlight), var(--highlight));
+}
+
+.row[data-highlighted="true"] .cell[data-open="true"],
+.cell[data-open="true"][data-column-highlighted="true"] {
+  background-image: linear-gradient(var(--accent-soft), var(--accent-soft));
+}
+
+.cellButton {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  z-index: 1;
+}
+
+.cellButton:hover::after {
+  content: "";
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+}
+
+.cell[data-open="true"] .cellButton:hover::after {
+  border-color: var(--border-strong);
+}
+
+.cellButton:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -3px;
+  border-radius: 4px;
+}
+
+.marker {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.marker[data-variant="voicing"] {
+  background: var(--deg, var(--accent));
+  color: var(--deg-fg, var(--accent-contrast));
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 2px 6px rgba(0, 0, 0, 0.45);
+  transform: scale(1.06);
+}
+
+.marker[data-variant="chordTone"] {
+  background: color-mix(in srgb, var(--deg) 28%, var(--wood));
+  color: #fff;
+  border: 2px solid var(--deg);
+  min-width: 26px;
+  height: 26px;
+}
+
+.cell[data-open="true"] .marker[data-variant="chordTone"] {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.marker[data-variant="marked"] {
+  background: var(--nut);
+  color: #1f1b16;
+}
+
+.marker[data-variant="revealed"] {
+  background: rgba(0, 0, 0, 0.35);
+  color: #efe8dc;
+  font-weight: 600;
+  min-width: 24px;
+  height: 24px;
+}
+
+.cell[data-open="true"] .marker[data-variant="revealed"] {
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.marker[data-marked="true"] {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.inlayRow {
+  height: 18px;
+}
+
+.inlayCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.inlay {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}

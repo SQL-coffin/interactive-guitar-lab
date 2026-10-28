@@ -1,0 +1,93 @@
+.summary {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.summary[aria-busy="true"] {
+  opacity: 0.6;
+}
+
+.heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.symbol {
+  font-size: 2.25rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.quality {
+  color: var(--text-muted);
+}
+
+.facts {
+  margin: 0;
+}
+
+.facts dt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.facts dd {
+  margin: 2px 0 0;
+}
+
+.formula {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+}
+
+.tones {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.tones th {
+  text-align: left;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tones td {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.degree {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--deg);
+  color: var(--deg-fg);
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.note {
+  font-weight: 650;
+  font-size: 1rem;
+}
+
+.semitones {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
