@@ -7,7 +7,7 @@ Status: the chord, voicing, fretboard, progression-optimization, and audio-analy
 - The UI should depend on the `GuitarLabService` interface rather than calling fetch from presentation components.
 - `createHttpGuitarLabService(baseUrl)` implements this contract over HTTP.
 - `createLocalGuitarLabService()` is an offline adapter for tests; it calls the shared engine in-process and cannot run audio analysis.
-- The default browser API base is same-origin `/api`.
+- At this revision, setting `NEXT_PUBLIC_GUITAR_LAB_API_URL=/api` selects the HTTP adapter. If unset, the current frontend uses the in-process local adapter.
 
 All payload types are the engine's exported types (`BuiltChord`, `VoicingSearchOptions`, `VoicingSearchResult`, `FretboardPosition`, `ProgressionOptimizationResult`, etc.), so frontend and backend share one definition.
 
