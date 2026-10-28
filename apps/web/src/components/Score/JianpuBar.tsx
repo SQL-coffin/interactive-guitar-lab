@@ -28,6 +28,8 @@ interface JianpuBarProps {
 }
 
 const x = (tick: number) => PAD + tick * TICK_WIDTH;
+/** Gap between a digit's centre and its augmentation dot: just clear of an 18px digit. */
+export const DOT_OFFSET = 9;
 
 /** Rests are written as one 0 per beat (never with dashes); shorter rests keep their underlines. */
 function restPieces(startTick: number, ticks: number, b: number): RhythmPiece[] {
@@ -57,17 +59,16 @@ function Glyph({ glyph, y, label, octave = 0, accidental = 0 }: { glyph: JianpuG
       {glyph.kind === "head" ? (
         <>
           {accidental !== 0 ? <text x={textX - 9} y={y - 4} fontSize="10" textAnchor="middle" fill="currentColor">{accidental > 0 ? "♯" : "♭"}</text> : null}
-          <text x={textX} y={y} fontSize="18" fontWeight="600" textAnchor="middle" fill="currentColor">{label}</text>
+          <text x={textX} y={y} fontSize="18" fontWeight="600" textAnchor="middle" fill="currentColor" data-glyph="head">{label}</text>
+          {glyph.dotted ? <circle cx={textX + DOT_OFFSET} cy={y - 6} r={2} fill="currentColor" data-glyph="dot" /> : null}
           {Array.from({ length: Math.max(0, octave) }, (_, k) => <circle key={`u${k}`} cx={textX} cy={y - 17 - k * 5} r={1.8} fill="currentColor" />)}
           {Array.from({ length: Math.max(0, -octave) }, (_, k) => <circle key={`d${k}`} cx={textX} cy={lineY(glyph.underlines) + 3 + k * 5} r={1.8} fill="currentColor" />)}
         </>
-      ) : glyph.kind === "dash" ? (
-        <line x1={left + width / 2 - 6} x2={left + width / 2 + 6} y1={y - 6} y2={y - 6} stroke="currentColor" strokeWidth={2} />
       ) : (
-        <circle cx={left + 4} cy={y - 6} r={2} fill="currentColor" />
+        <line x1={left + width / 2 - 6} x2={left + width / 2 + 6} y1={y - 6} y2={y - 6} stroke="currentColor" strokeWidth={2} data-glyph="dash" />
       )}
       {Array.from({ length: glyph.underlines }, (_, k) => (
-        <line key={k} x1={left + 1} x2={left + width - 1} y1={lineY(k)} y2={lineY(k)} stroke="currentColor" strokeWidth={1.4} />
+        <line key={k} x1={left + 1} x2={left + width - 1} y1={lineY(k)} y2={lineY(k)} stroke="currentColor" strokeWidth={1.4} data-glyph="underline" />
       ))}
     </g>
   );
@@ -80,6 +81,7 @@ function Tie({ from, to, y, below = false }: { from: number; to: number; y: numb
   return <path d={`M ${from} ${base} Q ${(from + to) / 2} ${base + dy} ${to} ${base}`} fill="none" stroke="currentColor" strokeWidth={1.2} />;
 }
 
+/** Centre of a piece's digit; ties start and end here. Matches the head position in `Glyph`. */
 function headX(piece: RhythmPiece) {
   return x(piece.startTick) + Math.min((piece.ticks >= 4 ? 4 : piece.ticks) * TICK_WIDTH / 2, 10);
 }

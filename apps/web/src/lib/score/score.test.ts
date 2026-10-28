@@ -152,7 +152,9 @@ describe("rhythm notation", () => {
 
   it("draws Jianpu dashes, dots and underlines", () => {
     expect(glyphsFor({ startTick: 0, value: "half", ticks: 8 }).map((g) => g.kind)).toEqual(["head", "dash"]);
-    expect(glyphsFor({ startTick: 0, value: "dotted-quarter", ticks: 6 }).map((g) => [g.kind, g.underlines])).toEqual([["head", 0], ["dot", 0]]);
+    // A dotted value is one dotted head spanning its full length: 6 ticks (dotted quarter), 3 ticks (dotted eighth).
+    expect(glyphsFor({ startTick: 0, value: "dotted-quarter", ticks: 6 })).toEqual([{ kind: "head", startTick: 0, ticks: 6, underlines: 0, dotted: true }]);
+    expect(glyphsFor({ startTick: 1, value: "dotted-eighth", ticks: 3 })).toEqual([{ kind: "head", startTick: 1, ticks: 3, underlines: 1, dotted: true }]);
     expect(glyphsFor({ startTick: 0, value: "eighth", ticks: 2 })[0]!.underlines).toBe(1);
     expect(glyphsFor({ startTick: 0, value: "sixteenth", ticks: 1 })[0]!.underlines).toBe(2);
   });

@@ -64,15 +64,17 @@ export function splitDuration(startTick: number, ticks: number, ticksPerBeat = 4
 
 /** One drawable element of a Jianpu voice. */
 export interface JianpuGlyph {
-  kind: "head" | "dash" | "dot";
+  kind: "head" | "dash";
   startTick: number;
-  /** Width in ticks this glyph occupies. */
+  /** Width in ticks this glyph occupies (a dotted head spans its whole value, dot included). */
   ticks: number;
-  /** 0, 1 (eighth) or 2 (sixteenth) underlines under a head or dot. */
+  /** 0, 1 (eighth) or 2 (sixteenth) underlines, spanning the glyph's ticks. */
   underlines: 0 | 1 | 2;
+  /** Augmentation dot (附点), drawn right beside the digit rather than at the tick it adds. */
+  dotted?: boolean;
 }
 
-/** Glyphs for one piece: a head, then dashes (one per extra beat) or a dot. */
+/** Glyphs for one piece: a head, then dashes (one per extra beat); dotted values are one dotted head. */
 export function glyphsFor(piece: RhythmPiece, ticksPerBeat = 4): JianpuGlyph[] {
   const { startTick: s, value } = piece;
   const b = ticksPerBeat;
@@ -84,11 +86,11 @@ export function glyphsFor(piece: RhythmPiece, ticksPerBeat = 4): JianpuGlyph[] {
     case "half":
       return [{ kind: "head", startTick: s, ticks: b, underlines: 0 }, { kind: "dash", startTick: s + b, ticks: b, underlines: 0 }];
     case "dotted-quarter":
-      return [{ kind: "head", startTick: s, ticks: b, underlines: 0 }, { kind: "dot", startTick: s + b, ticks: b / 2, underlines: 0 }];
+      return [{ kind: "head", startTick: s, ticks: VALUE_TICKS["dotted-quarter"], underlines: 0, dotted: true }];
     case "quarter":
       return [{ kind: "head", startTick: s, ticks: b, underlines: 0 }];
     case "dotted-eighth":
-      return [{ kind: "head", startTick: s, ticks: 2, underlines: 1 }, { kind: "dot", startTick: s + 2, ticks: 1, underlines: 1 }];
+      return [{ kind: "head", startTick: s, ticks: VALUE_TICKS["dotted-eighth"], underlines: 1, dotted: true }];
     case "eighth":
       return [{ kind: "head", startTick: s, ticks: 2, underlines: 1 }];
     case "sixteenth":
