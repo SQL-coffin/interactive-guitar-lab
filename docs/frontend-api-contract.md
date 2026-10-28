@@ -1,0 +1,60 @@
+# Frontend ⇄ Backend API Contract (provisional)
+
+Status: **proposed by the frontend, not yet implemented by the backend.** Nothing here changes
+`packages/music-theory`. Please review before building the routes; once agreed, these types should
+move into `packages/contracts` and `apps/web/src/services/contract.ts` should re-export from there.
+
+## How the frontend consumes it
+
+- The UI depends only on the `GuitarLabService` interface (`apps/web/src/services/guitarLabService.ts`).
+- `createHttpGuitarLabService(baseUrl)` implements this contract over HTTP.
+- `createLocalGuitarLabService()` is a temporary stand-in that calls the shared engine in-process
+  with the same async and error semantics. It contains no theory logic of its own.
+- Selection: set `NEXT_PUBLIC_GUITAR_LAB_API_URL` (e.g. `/api`) to use HTTP; leave it unset for the
+  local adapter.
+
+All payload types are the engine's own exported types (`BuiltChord`, `VoicingSearchOptions`,
+`VoicingSearchResult`, `FretboardPosition`, …), so the frontend and backend share one definition.
+
+## Conventions
+
+- JSON in and out. String numbers follow the engine: **1 = lowest-pitched string**. The UI converts
+  to guitar convention for display only.
+- Every non-2xx response uses this body:
+
+  ```json
+  { "error": { "code": "invalid_request", "message": "Invalid note spelling: H" } }
+  ```
+
+  `code` is one of `invalid_request` (400: bad spelling, unsupported quality, out-of-range options),
+  `not_found` (404), or `internal_error` (500). The client adds `network_error` itself when the
+  request never completes.
+- Engine `TypeError` / `RangeError` messages are user-safe and should be passed through as
+  `invalid_request` messages; the UI shows them verbatim.
+
+## Endpoints
+
+| Method | Path | Request | Response |
+| --- | --- | --- | --- |
+| GET | `/api/chords/qualities` | — | `{ qualities: ChordQuality[] }` (from `getSupportedChordQualities()`) |
+| GET | `/api/chords?root=C%23&quality=minor` | query: `root`, `quality` | `BuiltChord` (from `buildChord`) |
+| POST | `/api/voicings/search` | `{ root, quality, options?: VoicingSearchOptions }` | `VoicingSearchResult` (from `searchVoicings`) |
+| GET | `/api/fretboard?maxFret=15&tuning=40,45,50,55,59,64` | query: `maxFret`, optional `tuning` (comma-separated MIDI) | `{ tuning: number[], maxFret: number, positions: FretboardPosition[] }` |
+
+Options the UI sends today: `maxFret`, `maxFretSpan`, `minNotes`, `rootString`
+(omitted for "any string"), `requireAllTones`, `allowOpenStrings`, and `limit`.
+
+## Open questions / requested additions
+
+1. **Fingering**: diagrams currently show degrees or notes, not finger numbers, because `Voicing`
+   carries no finger assignment or barre information. Proposed addition:
+   `fingers: Array<1 | 2 | 3 | 4 | null>` and `barres: Array<{ fret: number; fromString: number; toString: number }>`.
+2. **Ranking**: with default options the heuristic ranks very sparse shapes first (for C major,
+   `x3x0x0` ranked #1 with `minNotes: 3`), because each muted string adds only +0.4 while each
+   fretted note adds +0.6 and each distinct fret adds +1.2. The UI defaults `minNotes` to 4 as a
+   mitigation; the backend may want to revisit the weights.
+3. **Display labels for qualities**: the UI keeps a label map (`apps/web/src/lib/qualities.ts`) and
+   falls back to the raw id. If the backend prefers to own labels, add `label` to the qualities
+   response.
+4. **Validation errors**: a structured `field` on `error` (e.g. `"options.maxFretSpan"`) would let the
+   UI highlight the offending control.
