@@ -1,0 +1,411 @@
+.slots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: var(--space-3);
+}
+
+.slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.slotHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.slotIndex {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.slotActions,
+.stepNav {
+  display: flex;
+  gap: 2px;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.iconButton:not(:disabled):hover {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+
+.iconButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.remove:not(:disabled):hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.slotSymbol {
+  font-size: 1.6rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.slotQuality {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.slotTones {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 0.8rem;
+}
+
+.slotTones li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px 1px 1px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+}
+
+.toneDegree {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--deg);
+  color: var(--deg-fg);
+  font-weight: 700;
+  font-size: 0.7rem;
+}
+
+.slotError {
+  color: var(--danger);
+  font-size: 0.8rem;
+}
+
+.slotLoading {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  min-height: 58px;
+}
+
+.picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.picker[data-compact="true"] {
+  margin-top: auto;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.picker[data-compact="true"] .pickerField {
+  flex: 1;
+  min-width: 0;
+}
+
+.pickerField {
+  display: grid;
+  gap: 4px;
+}
+
+.pickerLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.pickerField select,
+.settings select {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 0 var(--space-2);
+}
+
+.addForm {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.exampleButton {
+  margin-top: var(--space-3);
+}
+
+.settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.settings label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  min-width: 120px;
+}
+
+.settingsActions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.resultsArea {
+  margin-top: var(--space-4);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.results {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.results[aria-busy="true"] .sequence {
+  opacity: 0.55;
+}
+
+.staleNote {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.pathTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.pathTab {
+  display: grid;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.pathTab[aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.pathRank {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.pathCost {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.method {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  max-width: 90ch;
+}
+
+.sequence {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 var(--space-2);
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+}
+
+.sequenceItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.transitionChip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.stepCard {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: var(--space-2);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  width: 150px;
+}
+
+.stepCard:hover {
+  border-color: var(--border-strong);
+}
+
+.stepCard[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.stepSymbol {
+  font-weight: 750;
+  font-size: 1.05rem;
+}
+
+.stepDiagram {
+  display: flex;
+  justify-content: center;
+}
+
+.stepTab {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  background: var(--surface-sunken);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.stepDetail {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  min-width: 0;
+}
+
+.stepDetailHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.stepDetailHeader h3 {
+  font-size: 1rem;
+}
+
+.stepDetailHeader code {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  margin-left: var(--space-2);
+  color: var(--text-muted);
+}
+
+.costs {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  font-size: 0.85rem;
+}
+
+.costs dt {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.costs dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.breakdownWrap {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 560px) {
+  .slots {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+
+  .settings label {
+    min-width: calc(50% - var(--space-3));
+    flex: 1;
+  }
+
+  .settingsActions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .settingsActions > * {
+    flex: 1;
+  }
+
+  .stepDetail {
+    padding: var(--space-3);
+  }
+}
