@@ -1,8 +1,8 @@
 /**
  * Provisional frontend ⇄ backend contract.
  *
- * Every payload type is re-exported from the engine packages (type-only) so the UI cannot drift
- * from the engine's shapes. When packages/contracts lands, these aliases should be repointed there.
+ * Payload types are re-exported from the engine packages (type-only) so the UI cannot drift from
+ * the engine's shapes. A dedicated contracts package can be introduced if API consumers expand.
  */
 import type {
   AnalyzeAudioForChordsResult,

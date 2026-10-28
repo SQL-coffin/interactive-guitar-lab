@@ -8,7 +8,14 @@ const json = (body: unknown, status = 200) =>
 
 describe("http adapter", () => {
   it("builds the documented requests", async () => {
-    const fetchMock = vi.fn(async () => json({ qualities: ["major"] }));
+    const chord = { symbol: "C#m", root: "C#", quality: "minor", formula: ["1", "♭3", "5"], tones: [] };
+    const bodies: Array<[string, unknown]> = [
+      ["/chords/qualities", { qualities: ["major"] }],
+      ["/chords?", chord],
+      ["/fretboard", { tuning: [40, 45], maxFret: 12, positions: [] }],
+      ["/voicings/search", { chord, results: [], totalFound: 0, options: {} }],
+    ];
+    const fetchMock = vi.fn(async (url: string) => json(bodies.find(([path]) => url.includes(path))![1]));
     const service = createHttpGuitarLabService("/api/", fetchMock as typeof fetch);
 
     await expect(service.listChordQualities()).resolves.toEqual(["major"]);
