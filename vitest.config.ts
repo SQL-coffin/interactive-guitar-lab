@@ -2,8 +2,16 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ["packages/**/*.test.ts"],
-    environment: "node",
-    clearMocks: true
-  }
+    projects: [
+      {
+        test: {
+          name: "music-theory",
+          include: ["packages/**/*.test.ts"],
+          environment: "node",
+          clearMocks: true,
+        },
+      },
+      "apps/web/vitest.config.ts",
+    ],
+  },
 });
