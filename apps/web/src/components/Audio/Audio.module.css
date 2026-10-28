@@ -648,3 +648,8 @@
   font-size: 0.8rem;
   font-weight: 650;
 }
+
+.viewSwitch {
+  display: flex;
+  justify-content: flex-start;
+}

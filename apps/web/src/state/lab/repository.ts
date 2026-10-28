@@ -6,6 +6,7 @@ import {
   type SavedProgression,
   type SavedProgressionSummary,
 } from "./model";
+import type { ScoreDocument } from "@/lib/score/document";
 
 /** Storage for completed analyses and saved progressions. Audio files are never stored. */
 export interface LabRepository {
@@ -18,6 +19,9 @@ export interface LabRepository {
   getProgression(id: string): Promise<SavedProgression | undefined>;
   putProgression(progression: SavedProgression): Promise<void>;
   deleteProgression(id: string): Promise<void>;
+  /** One editable score per analysis session (keyed by session id). */
+  getScore(sessionId: string): Promise<ScoreDocument | undefined>;
+  putScore(score: ScoreDocument): Promise<void>;
 }
 
 const byNewest = <T extends { createdAt?: string; updatedAt?: string }>(a: T, b: T) =>
@@ -27,24 +31,32 @@ const byNewest = <T extends { createdAt?: string; updatedAt?: string }>(a: T, b:
 export function createMemoryRepository(): LabRepository {
   const sessions = new Map<string, AnalysisSession>();
   const progressions = new Map<string, SavedProgression>();
+  const scores = new Map<string, ScoreDocument>();
   const clone = <T>(value: T): T => structuredClone(value);
   return {
     kind: "memory",
     listSessions: async () => [...sessions.values()].map(summarizeSession).sort(byNewest),
     getSession: async (id) => (sessions.has(id) ? clone(sessions.get(id)!) : undefined),
     putSession: async (session) => void sessions.set(session.id, clone(session)),
-    deleteSession: async (id) => void sessions.delete(id),
+    deleteSession: async (id) => {
+      sessions.delete(id);
+      scores.delete(id);
+    },
     listProgressions: async () => [...progressions.values()].map(summarizeProgression).sort(byNewest),
     getProgression: async (id) => (progressions.has(id) ? clone(progressions.get(id)!) : undefined),
     putProgression: async (progression) => void progressions.set(progression.id, clone(progression)),
     deleteProgression: async (id) => void progressions.delete(id),
+    getScore: async (sessionId) => (scores.has(sessionId) ? clone(scores.get(sessionId)!) : undefined),
+    putScore: async (score) => void scores.set(score.sessionId, clone(score)),
   };
 }
 
 const DB_NAME = "guitar-theory-lab";
-const DB_VERSION = 1;
+// v2 adds the scores store; upgrading only creates missing stores, so v1 data is kept.
+const DB_VERSION = 2;
 // Summaries are stored separately so listing never loads multi-megabyte analysis payloads.
-const STORES = { sessions: "sessions", sessionIndex: "sessionIndex", progressions: "progressions" } as const;
+const STORES = { sessions: "sessions", sessionIndex: "sessionIndex", progressions: "progressions", scores: "scores" } as const;
+const KEY_PATHS: Record<string, string> = { scores: "sessionId" };
 
 function request<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -66,7 +78,7 @@ export async function openIndexedDbRepository(factory: IDBFactory = indexedDB): 
   open.onupgradeneeded = () => {
     const db = open.result;
     for (const name of Object.values(STORES)) {
-      if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath: KEY_PATHS[name] ?? "id" });
     }
   };
   const db = await request(open);
@@ -91,14 +103,17 @@ export async function openIndexedDbRepository(factory: IDBFactory = indexedDB): 
       tx.objectStore(STORES.sessions).put(session);
       tx.objectStore(STORES.sessionIndex).put(summarizeSession(session));
     }),
-    deleteSession: (id) => write([STORES.sessions, STORES.sessionIndex], (tx) => {
+    deleteSession: (id) => write([STORES.sessions, STORES.sessionIndex, STORES.scores], (tx) => {
       tx.objectStore(STORES.sessions).delete(id);
       tx.objectStore(STORES.sessionIndex).delete(id);
+      tx.objectStore(STORES.scores).delete(id);
     }),
     listProgressions: async () =>
       ((await read(STORES.progressions, (s) => s.getAll())) as SavedProgression[]).map(summarizeProgression).sort(byNewest),
     getProgression: (id) => read(STORES.progressions, (s) => s.get(id)) as Promise<SavedProgression | undefined>,
     putProgression: (progression) => write([STORES.progressions], (tx) => void tx.objectStore(STORES.progressions).put(progression)),
     deleteProgression: (id) => write([STORES.progressions], (tx) => void tx.objectStore(STORES.progressions).delete(id)),
+    getScore: (sessionId) => read(STORES.scores, (s) => s.get(sessionId)) as Promise<ScoreDocument | undefined>,
+    putScore: (score) => write([STORES.scores], (tx) => void tx.objectStore(STORES.scores).put(score)),
   };
 }

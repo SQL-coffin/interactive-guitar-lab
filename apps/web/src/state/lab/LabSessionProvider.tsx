@@ -22,6 +22,14 @@ import {
   type SavedProgressionSummary,
 } from "./model";
 import { createMemoryRepository, openIndexedDbRepository, type LabRepository } from "./repository";
+import { emptyScore, type ScoreDocument } from "@/lib/score/document";
+
+export interface ScoreDraft {
+  doc: ScoreDocument;
+  dirty: boolean;
+  status: "loading" | "ready";
+  lastSavedAt: string | null;
+}
 
 export interface ProgressionDraft {
   progression: ProgressionState;
@@ -99,6 +107,10 @@ interface LabContextValue {
   focus: TimelineFocus | null;
   focusWindow: (focus: TimelineFocus) => void;
   clearFocus: () => void;
+  /** Editable score for the active session (null when no session is active). */
+  score: ScoreDraft | null;
+  editScore: (update: (doc: ScoreDocument) => ScoreDocument) => void;
+  saveScore: () => Promise<void>;
 }
 
 const LabContext = createContext<LabContextValue | null>(null);
@@ -155,6 +167,9 @@ export function LabSessionProvider({ children, repository }: { children: ReactNo
   const [audio, setAudio] = useState<{ file: File; sessionId: string | null } | null>(null);
   const [draft, dispatchDraft] = useReducer(draftReducer, EMPTY_DRAFT);
   const [focus, setFocus] = useState<TimelineFocus | null>(null);
+  const [score, setScore] = useState<ScoreDraft | null>(null);
+  const scoreRef = useRef(score);
+  scoreRef.current = score;
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const resetOptimizer = optimizer.reset;
@@ -196,16 +211,38 @@ export function LabSessionProvider({ children, repository }: { children: ReactNo
     };
   }, [repository]);
 
-  // Unsaved progression edits are only in memory; warn before a reload or tab close discards them.
+  // Load the score overlay for the active session (an empty one if none was saved).
+  const activeSessionId = activeSession?.id ?? null;
   useEffect(() => {
-    if (!draft.dirty) return;
+    if (!activeSessionId) {
+      setScore(null);
+      return;
+    }
+    let cancelled = false;
+    setScore({ doc: emptyScore(activeSessionId), dirty: false, status: "loading", lastSavedAt: null });
+    (async () => {
+      const saved = repo ? await repo.getScore(activeSessionId).catch(() => undefined) : undefined;
+      if (cancelled) return;
+      setScore((current) => (current && current.doc.sessionId === activeSessionId && current.dirty
+        ? { ...current, status: "ready" }
+        : { doc: saved ?? emptyScore(activeSessionId), dirty: false, status: "ready", lastSavedAt: saved?.updatedAt ?? null }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionId, repo]);
+
+  // Unsaved progression or score edits are only in memory; warn before a reload or tab close discards them.
+  const anyDirty = draft.dirty || score?.dirty === true;
+  useEffect(() => {
+    if (!anyDirty) return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [draft.dirty]);
+  }, [anyDirty]);
 
   const refreshLists = useCallback(async (store: LabRepository) => {
     const [sessionList, progressionList] = await Promise.all([store.listSessions(), store.listProgressions()]);
@@ -346,6 +383,18 @@ export function LabSessionProvider({ children, repository }: { children: ReactNo
   const dispatchProgression = useCallback((action: ProgressionAction) => dispatchDraft({ type: "edit", action }), []);
   const attachAudio = useCallback((file: File, sessionId: string | null) => setAudio({ file, sessionId }), []);
   const focusWindow = useCallback((next: TimelineFocus) => setFocus(next), []);
+  const editScore = useCallback((update: (doc: ScoreDocument) => ScoreDocument) => {
+    setScore((current) => (current ? { ...current, doc: update(current.doc), dirty: true } : current));
+  }, []);
+  const saveScore = useCallback(async () => {
+    const current = scoreRef.current;
+    if (!repo || !current) return;
+    const doc = { ...current.doc, updatedAt: new Date().toISOString() };
+    await repo.putScore(doc);
+    setScore((latest) => (latest && latest.doc.sessionId === doc.sessionId
+      ? { doc: latest.doc === current.doc ? doc : latest.doc, dirty: latest.doc !== current.doc, status: "ready", lastSavedAt: doc.updatedAt }
+      : latest));
+  }, [repo]);
   const clearFocus = useCallback(() => setFocus(null), []);
 
   const value = useMemo<LabContextValue>(() => ({
@@ -353,10 +402,11 @@ export function LabSessionProvider({ children, repository }: { children: ReactNo
     sessions, activeSession, sessionError, run, analyze, cancelAnalysis, audio, attachAudio,
     openSession, closeSession, deleteSession,
     draft, dispatchProgression, createProgressionFromSession, saveProgression, openProgression, newProgression,
-    deleteProgression, savedProgressions, optimizer, focus, focusWindow, clearFocus,
+    deleteProgression, savedProgressions, optimizer, focus, focusWindow, clearFocus, score, editScore, saveScore,
   }), [repo, storageWarning, sessions, activeSession, sessionError, run, analyze, cancelAnalysis, audio, attachAudio,
     openSession, closeSession, deleteSession, draft, dispatchProgression, createProgressionFromSession, saveProgression,
-    openProgression, newProgression, deleteProgression, savedProgressions, optimizer, focus, focusWindow, clearFocus]);
+    openProgression, newProgression, deleteProgression, savedProgressions, optimizer, focus, focusWindow, clearFocus,
+    score, editScore, saveScore]);
 
   return <LabContext.Provider value={value}>{children}</LabContext.Provider>;
 }
