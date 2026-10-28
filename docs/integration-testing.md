@@ -25,6 +25,44 @@ UI with the API response bodies captured from the network.
    Regression test: `apps/web/src/services/apiRoutes.integration.test.ts` drives the real HTTP
    adapter through the real route handlers. It fails with `240 > 192` when the clamp is removed.
 
+2. **Cancelling an analysis didn't cancel the worker request** (fixed in PR #3, `93a323d`). The
+   route never forwarded `request.signal`, so each browser cancel left the Next→worker request
+   open until the 120 s timeout. Measured against a worker stub that never answers: 3 cancels left
+   3 upstream connections open; after the fix all were closed within 5 s, both through the UI and
+   with `curl -m 3`. Regression tests: `worker-client.test.ts` ("aborts the worker request…") and
+   `apiRoutes.test.ts` ("cancels the worker request when the client disconnects").
+3. **Server failures were not logged** (fixed in PR #3, `93a323d`). Worker outages (502) and
+   unexpected 500s produced no server log line. They are now logged with the error message only,
+   for example `[audio-analysis] worker failure (status none): Audio worker request failed: fetch failed`.
+   The worker URL and environment values are never logged, and client cancels are not logged as
+   outages. Regression test: `apiRoutes.test.ts` ("logs worker outages…").
+
+## Round 2 checks (real HTTP and browser, production build at `56afd1d`)
+
+| Check | Result |
+| --- | --- |
+| Independent theory check of `/api/chords` + `/api/voicings/search` (17 root spellings × 6 qualities): intervals, letter spelling, MIDI = tuning + fret, pitch class, degree, span, required tones | 102 chords, 1,020 voicings, 0 problems |
+| Invalid chord, search and fretboard inputs | 8/8 return 400 with a specific message |
+| `POST /api/progressions/optimize` boundaries: missing, empty or non-array layers, an empty candidate layer, 13 layers, 33 per layer, 193 total (192 accepted), malformed or mixed-length candidates, confidence above 1, unknown fields or options, limit 21, negative weight, non-JSON | 22/22 as expected, never a 500 |
+| Browser: the real route's 400 (request rewritten to an empty layer) shown in the UI; aborted request → network error and **no paths** (proves there is no in-process fallback); recovery | Pass |
+| Audio over HTTP: 26 MiB → 413; empty file, `.txt` file, bad `windowSeconds`, bad `options` → 400; dead worker → 502 in 0.04 s; hung worker → 502 after 120.0 s | Pass |
+| Browser audio: malformed 200 → error with no results; 26 MiB blocked before upload (0 requests); `.txt` → worker 400; dead worker → 502 message; hung worker → analyzing + Cancel → 502 at 120.2 s | 13/13 |
+| Logs: 11 secret-like environment values searched for in all server and worker logs | 0 occurrences |
+
+## F♯m7 vs A: where the problem comes from
+
+Fixture `A-F♯m7-D-E` (expected F♯m7 in windows 3–4, bass F♯):
+
+- **Transport:** fine. The worker's raw frames match the API's windows, and an independent
+  Python recomputation of the template scores gives the same ranking as the API in 8/8 windows.
+- **Candidate generation:** fine. F♯m7 is present, ranked #2.
+- **Scoring:** F♯m beats F♯m7 by 0.006–0.018. The seventh (E) has only 0.29–0.32 chroma energy
+  against 1.00 for C♯, and equal-weight cosine templates favour the triad when the seventh is quiet.
+- **Ambiguity:** partly genuine. F♯m7 contains F♯m entirely.
+- **"A over F♯m7":** not reproduced. A fits these windows at only 0.59–0.64 and is outside the
+  top 6, so the optimizer cannot choose it. The reported case needs audio where A is in the top 3.
+  It needs that recording with ground-truth labels before any weight change is justified.
+
 ## Audio chord accuracy (synthesized reference set)
 
 `e2e/audio-accuracy.mjs` sent five progressions through `POST /api/audio-analysis`. Each has
