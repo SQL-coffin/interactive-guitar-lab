@@ -3,11 +3,13 @@
   "private": true,
   "version": "0.1.0",
   "description": "Interactive guitar music theory learning lab",
-  "workspaces": ["packages/*"],
+  "workspaces": ["packages/*", "apps/*"],
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && npm run typecheck --workspace @interactive-guitar-lab/web",
+    "dev": "npm run dev --workspace @interactive-guitar-lab/web",
+    "build:web": "npm run build --workspace @interactive-guitar-lab/web"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
