@@ -17,6 +17,7 @@ describe("Next.js backend API routes", () => {
     expect(response.status).toBe(200);
     expect(body.qualities).toContain("major7");
     expect(body.qualities).toContain("minor7");
+    expect(body.qualities).toEqual(expect.arrayContaining(["sus2", "augmented", "diminished", "add9"]));
   });
 
   it("builds a chord and returns contract-shaped validation errors", async () => {
@@ -25,6 +26,13 @@ describe("Next.js backend API routes", () => {
     expect(valid.status).toBe(200);
     expect(chord.symbol).toBe("AMaj7");
     expect(chord.tones.length).toBe(4);
+
+    const add9 = await getChord(new Request("http://localhost/api/chords?root=C&quality=add9"));
+    const add9Body = await add9.json() as { symbol: string; formula: string[]; tones: Array<{ spelling: string }> };
+    expect(add9.status).toBe(200);
+    expect(add9Body.symbol).toBe("Cadd9");
+    expect(add9Body.formula).toEqual(["1", "3", "5", "9"]);
+    expect(add9Body.tones.map((tone) => tone.spelling)).toEqual(["C", "E", "G", "D"]);
 
     const missing = await getChord(new Request("http://localhost/api/chords?root=A"));
     expect(missing.status).toBe(400);

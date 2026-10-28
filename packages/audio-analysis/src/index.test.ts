@@ -63,6 +63,20 @@ describe("chroma-based chord inference", () => {
     expect(withBass.candidates[0]!.evidence.bassRootMatch).toBe(true);
   });
 
+  it.each([
+    { quality: "sus2" as const, pitchClasses: [0, 2, 7] },
+    { quality: "augmented" as const, pitchClasses: [0, 4, 8] },
+    { quality: "diminished" as const, pitchClasses: [0, 3, 6] },
+    { quality: "add9" as const, pitchClasses: [0, 2, 4, 7] },
+  ])("includes $quality in the chord-inference template set", ({ quality, pitchClasses }) => {
+    const energies = Array.from({ length: 12 }, () => 0);
+    for (const pitchClass of pitchClasses) energies[pitchClass] = 1;
+    const result = inferChordCandidates(chromaFrame(energies, 0), { qualities: [quality], limit: 1 });
+    expect(result.candidates[0]!.quality).toBe(quality);
+    expect(result.candidates[0]!.root).toBe("C");
+    expect(result.candidates[0]!.confidence).toBeGreaterThan(0.99);
+  });
+
   it("returns no chord candidates for a silent frame", () => {
     const result = inferChordCandidates(chromaFrame(Array.from({ length: 12 }, () => 0)));
     expect(result.candidates).toEqual([]);

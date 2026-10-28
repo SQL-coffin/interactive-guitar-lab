@@ -45,7 +45,7 @@ export function ChordSlotCard({
     <li
       className={styles.slot}
       data-origin={source ? (corrected ? "corrected" : "detected") : "manual"}
-      aria-label={`${position}: ${data ? data.symbol : `${slot.root} ${slot.quality}`}${corrected ? `, corrected (detected ${source!.detected.symbol})` : source ? ", detected" : ""}`}
+      aria-label={`${position}: ${data ? data.symbol : `${slot.root} ${qualityLabel(slot.quality)}`}${corrected ? `, corrected (detected ${source!.detected.symbol})` : source ? ", detected" : ""}`}
     >
       <div className={styles.slotHeader}>
         <span className={styles.slotIndex}>{index + 1}</span>
