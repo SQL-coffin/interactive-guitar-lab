@@ -46,6 +46,11 @@ node e2e/audio-accuracy.mjs e2e/fixtures/out http://localhost:3000
 node e2e/browser-workflows.cjs e2e/fixtures/out/pop-I-V-vi-IV-C.wav http://localhost:3000
 ```
 
+```bash
+# Analysis sessions and the analysis → progression workflow (real IndexedDB, real reloads)
+node e2e/session-workflows.cjs e2e/fixtures/out/pop-I-V-vi-IV-C.wav http://localhost:3000
+```
+
 `audio-accuracy.mjs` reports accuracy misses without failing, and exits non-zero only if the
 service fails. Set `CHORD_CONFIDENCE_WEIGHT` to compare optimizer weights through the existing API option.
 

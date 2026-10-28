@@ -30,10 +30,11 @@ const shows = (locator, timeout = 10000) => locator.first().waitFor({ timeout })
   await page.waitForSelector('[aria-label^="Voicing 1:"]');
   for (const [root, quality, label] of [['D', 'minor7', 'Minor 7'], ['F♯', 'dominant7', 'Dominant 7'], ['B♭', 'sus4', 'Sus 4']]) {
     if (root === 'B♭') await page.getByRole('radio', { name: '♭' }).click();
-    const chordResp = waitResp('/api/chords'); const vResp = waitResp('/api/voicings/search', 'POST');
+    // The quality click supersedes the root click's requests (the app aborts stale ones), so wait for the final pair.
+    const vResp = page.waitForResponse((r) => r.url().includes('/api/voicings/search') && r.request().postData()?.includes(`"quality":"${quality}"`));
     await page.getByRole('radio', { name: root, exact: true }).click();
     await page.getByRole('radio', { name: label }).click();
-    const chord = await (await chordResp).json();
+    await vResp;
     // there can be two in-flight responses (root change, then quality change); wait for the final one
     await page.waitForTimeout(400);
     const finalChord = last('/api/chords?').j; const finalV = last('/api/voicings/search').j;
@@ -184,9 +185,11 @@ const shows = (locator, timeout = 10000) => locator.first().waitFor({ timeout })
   await cancelReq;
   await page.getByRole('button', { name: 'Cancel' }).click();
   await page.waitForTimeout(2500);
-  ok('C: cancel returns to idle without results', (await page.getByText('No analysis yet').isVisible()) && !(await page.getByText('Tempo (estimate)').isVisible()));
+  // Cancelling a new run must not discard the completed, saved session (and must not add one).
+  ok('C: cancel stops the new run and keeps the saved session', !(await page.getByText(/^Uploading|Analyzing on the server/).first().isVisible())
+    && (await page.getByText('Tempo (estimate)').isVisible())
+    && (await page.getByRole('region', { name: 'Recent analyses' }).getByRole('listitem').count()) === 1);
   // Undecodable upload: the worker must reject it and no previous result may remain visible.
-  await page.getByRole('button', { name: 'Analyze recording' }).isDisabled();
   const junk = nodePath.join(S, 'not-audio.wav'); fs.writeFileSync(junk, 'definitely not audio\n');
   await page.setInputFiles('input[type=file]', junk);
   const badResp = waitResp('/api/audio-analysis', 'POST');
@@ -194,7 +197,10 @@ const shows = (locator, timeout = 10000) => locator.first().waitFor({ timeout })
   const bad = await badResp;
   const badAlert = page.locator('main').getByRole('alert');
   await badAlert.waitFor();
-  ok('C: undecodable file → HTTP 400 + error, no results', bad.status() === 400 && !(await page.getByText('Tempo (estimate)').isVisible()), await badAlert.innerText());
+  ok('C: undecodable file → HTTP 400 + error, nothing saved for it', bad.status() === 400
+    && (await page.getByRole('region', { name: 'Recent analyses' }).getByRole('listitem').count()) === 1
+    && (await page.getByText(/Nothing was saved for not-audio\.wav/).isVisible())
+    && !(await page.getByRole('region', { name: 'Overview' }).innerText()).includes('not-audio.wav'), await badAlert.innerText());
   await page.screenshot({ path: `${S}/p2-audio.png`, fullPage: true });
   await page.close();
   console.log(results.map((r) => r.join('  ')).join('\n'));
