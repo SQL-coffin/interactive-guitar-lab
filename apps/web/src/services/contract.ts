@@ -1,13 +1,23 @@
 /**
  * Provisional frontend ⇄ backend contract.
  *
- * Every payload type is re-exported from `@interactive-guitar-lab/music-theory` (type-only)
- * so the UI cannot drift from the engine's shapes. When `packages/contracts` lands, these
- * aliases should be repointed there; the UI only imports from this module.
- *
- * The chord, voicing, fretboard, and audio-analysis HTTP routes are implemented under
- * `src/app/api`. See `docs/frontend-api-contract.md` for request/response details.
+ * Every payload type is re-exported from the engine packages (type-only) so the UI cannot drift
+ * from the engine's shapes. When packages/contracts lands, these aliases should be repointed there.
  */
+import type {
+  AnalyzeAudioForChordsResult,
+  ChordCandidate,
+  ChordInferenceResult,
+  ChromaProgressionAnalysisOptions,
+  ChromaProgressionAnalysisResult,
+} from "@interactive-guitar-lab/audio-analysis";
+import type {
+  OptimizedVoicingProgression,
+  OptimizedVoicingStep,
+  ProgressionCandidateInput,
+  ProgressionOptimizationOptions,
+  ProgressionOptimizationResult,
+} from "@interactive-guitar-lab/music-theory";
 import type {
   BuiltChord,
   ChordQuality,
@@ -20,6 +30,16 @@ import type {
 } from "@interactive-guitar-lab/music-theory";
 
 export type {
+  AnalyzeAudioForChordsResult,
+  ChordCandidate,
+  ChordInferenceResult,
+  ChromaProgressionAnalysisOptions,
+  ChromaProgressionAnalysisResult,
+  OptimizedVoicingProgression,
+  OptimizedVoicingStep,
+  ProgressionCandidateInput,
+  ProgressionOptimizationOptions,
+  ProgressionOptimizationResult,
   BuiltChord,
   ChordQuality,
   ChordTone,
@@ -61,6 +81,26 @@ export interface FretboardResponse {
   maxFret: number;
   positions: FretboardPosition[];
 }
+
+/** POST /api/audio-analysis (multipart/form-data). */
+export interface AudioAnalysisRequest {
+  file: Blob;
+  /** Upload filename; defaults to the File's own name. */
+  filename?: string;
+  /** Analysis window length, 0.1–2.0 seconds. */
+  windowSeconds?: number;
+  /** Sent as the JSON-encoded `options` form field. */
+  options?: ChromaProgressionAnalysisOptions;
+}
+export type AudioAnalysisResponse = AnalyzeAudioForChordsResult;
+
+/** POST /api/progressions/optimize */
+export interface ProgressionOptimizationRequest {
+  /** One layer per chord slot; each layer holds that chord's candidate voicings. */
+  layers: ReadonlyArray<ReadonlyArray<ProgressionCandidateInput>>;
+  options?: ProgressionOptimizationOptions;
+}
+export type ProgressionOptimizationResponse = ProgressionOptimizationResult;
 
 /** Error body for every non-2xx response. */
 export interface ApiErrorBody {

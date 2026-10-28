@@ -1,10 +1,12 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { searchVoicings } from "@interactive-guitar-lab/music-theory";
 import { GET as getQualities } from "@/app/api/chords/qualities/route";
 import { GET as getChord } from "@/app/api/chords/route";
 import { POST as postVoicingSearch } from "@/app/api/voicings/search/route";
 import { GET as getFretboard } from "@/app/api/fretboard/route";
 import { POST as postAudioAnalysis } from "@/app/api/audio-analysis/route";
+import { POST as postProgressionOptimization } from "@/app/api/progressions/optimize/route";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -123,5 +125,51 @@ describe("Next.js backend API routes", () => {
     }));
     expect(invalidOptions.status).toBe(400);
     expect(await invalidOptions.json()).toMatchObject({ error: { code: "invalid_request" } });
+  });
+
+  it("optimizes supplied progression candidates through the HTTP contract", async () => {
+    const candidates = searchVoicings("A", "major", { limit: 2 }).results;
+    const response = await postProgressionOptimization(new Request("http://localhost/api/progressions/optimize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ layers: [candidates, candidates], options: { limit: 2 } }),
+    }));
+    const body = await response.json() as {
+      results: Array<{ steps: Array<{ chordSymbol: string }>; totalCost: number }>;
+      candidateCounts: number[];
+      options: { limit: number };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.results).toHaveLength(2);
+    expect(body.results[0]!.steps.map((step) => step.chordSymbol)).toEqual(["A", "A"]);
+    expect(Number.isFinite(body.results[0]!.totalCost)).toBe(true);
+    expect(body.candidateCounts).toEqual([2, 2]);
+    expect(body.options.limit).toBe(2);
+  });
+
+  it("rejects malformed and oversized progression optimization inputs", async () => {
+    const invalidLayer = await postProgressionOptimization(new Request("http://localhost/api/progressions/optimize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ layers: [[{}]] }),
+    }));
+    expect(invalidLayer.status).toBe(400);
+    expect(await invalidLayer.json()).toMatchObject({ error: { code: "invalid_request" } });
+
+    const tooManyResults = await postProgressionOptimization(new Request("http://localhost/api/progressions/optimize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ layers: [[searchVoicings("A", "major", { limit: 1 }).results[0]]], options: { limit: 21 } }),
+    }));
+    expect(tooManyResults.status).toBe(400);
+    expect(await tooManyResults.json()).toMatchObject({ error: { code: "invalid_request" } });
+
+    const tooManyLayers = await postProgressionOptimization(new Request("http://localhost/api/progressions/optimize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ layers: Array.from({ length: 13 }, () => [{}]) }),
+    }));
+    expect(tooManyLayers.status).toBe(400);
   });
 });

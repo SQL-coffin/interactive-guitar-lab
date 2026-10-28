@@ -6,13 +6,13 @@ import {
 import {
   getSupportedChordQualities,
   type ChordQuality,
-  type ProgressionOptimizationOptions,
 } from "@interactive-guitar-lab/music-theory";
 import {
   apiError,
   apiErrorFromException,
   isRecord,
   validateChordQuality,
+  validateProgressionOptimizationOptions,
   validateVoicingSearchOptions,
 } from "@/lib/api";
 
@@ -25,46 +25,6 @@ const ANALYSIS_OPTION_KEYS = new Set([
   "voicingSearchOptions",
   "progressionOptions",
 ]);
-const PROGRESSION_OPTION_KEYS = new Set([
-  "limit",
-  "localScoreWeight",
-  "chordConfidenceWeight",
-  "positionShiftWeight",
-  "stringMovementWeight",
-  "muteChangeWeight",
-  "bassMovementWeight",
-]);
-
-function parseProgressionOptions(value: unknown): ProgressionOptimizationOptions {
-  if (value === undefined) return {};
-  if (!isRecord(value)) throw new TypeError("options.progressionOptions must be a JSON object.");
-  for (const key of Object.keys(value)) {
-    if (!PROGRESSION_OPTION_KEYS.has(key)) throw new TypeError(`Unknown progression option: ${key}.`);
-  }
-  const parsed: ProgressionOptimizationOptions = {};
-  if (value.limit !== undefined) {
-    if (typeof value.limit !== "number" || !Number.isInteger(value.limit) || value.limit < 1 || value.limit > 100) {
-      throw new RangeError("options.progressionOptions.limit must be an integer from 1 to 100.");
-    }
-    parsed.limit = value.limit;
-  }
-  for (const key of [
-    "localScoreWeight",
-    "chordConfidenceWeight",
-    "positionShiftWeight",
-    "stringMovementWeight",
-    "muteChangeWeight",
-    "bassMovementWeight",
-  ] as const) {
-    const candidate = value[key];
-    if (candidate === undefined) continue;
-    if (typeof candidate !== "number" || !Number.isFinite(candidate) || candidate < 0) {
-      throw new RangeError(`options.progressionOptions.${key} must be a finite non-negative number.`);
-    }
-    parsed[key] = candidate;
-  }
-  return parsed;
-}
 
 function parseAnalysisOptions(value: unknown): ChromaProgressionAnalysisOptions {
   if (value === undefined) return {};
@@ -115,7 +75,7 @@ function parseAnalysisOptions(value: unknown): ChromaProgressionAnalysisOptions 
     parsed.voicingSearchOptions = searchOptions;
   }
   if (value.progressionOptions !== undefined) {
-    parsed.progressionOptions = parseProgressionOptions(value.progressionOptions);
+    parsed.progressionOptions = validateProgressionOptimizationOptions(value.progressionOptions, 100, "options.progressionOptions");
   }
   return parsed;
 }

@@ -1,5 +1,6 @@
 import {
   getSupportedChordQualities,
+  type ProgressionOptimizationOptions,
   type VoicingSearchOptions,
 } from "@interactive-guitar-lab/music-theory";
 import type { ApiErrorBody, ApiErrorCode } from "@/services/contract";
@@ -53,6 +54,56 @@ export function validateVoicingSearchOptions(value: unknown): VoicingSearchOptio
   }
 
   return value as unknown as VoicingSearchOptions;
+}
+
+/**
+ * Shares progression weight validation between audio analysis and the standalone optimizer API.
+ * The route may lower maxLimit to constrain the amount of work requested over HTTP.
+ */
+export function validateProgressionOptimizationOptions(
+  value: unknown,
+  maxLimit = 100,
+  fieldPath = "options",
+): ProgressionOptimizationOptions {
+  if (value === undefined) return {};
+  if (!isRecord(value)) throw new TypeError(`${fieldPath} must be a JSON object.`);
+
+  const allowed = new Set([
+    "limit",
+    "localScoreWeight",
+    "chordConfidenceWeight",
+    "positionShiftWeight",
+    "stringMovementWeight",
+    "muteChangeWeight",
+    "bassMovementWeight",
+  ]);
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) throw new TypeError(`Unknown progression option: ${key}.`);
+  }
+
+  const parsed: ProgressionOptimizationOptions = {};
+  if (value.limit !== undefined) {
+    if (typeof value.limit !== "number" || !Number.isInteger(value.limit) || value.limit < 1 || value.limit > maxLimit) {
+      throw new RangeError(`${fieldPath}.limit must be an integer from 1 to ${maxLimit}.`);
+    }
+    parsed.limit = value.limit;
+  }
+  for (const key of [
+    "localScoreWeight",
+    "chordConfidenceWeight",
+    "positionShiftWeight",
+    "stringMovementWeight",
+    "muteChangeWeight",
+    "bassMovementWeight",
+  ] as const) {
+    const candidate = value[key];
+    if (candidate === undefined) continue;
+    if (typeof candidate !== "number" || !Number.isFinite(candidate) || candidate < 0) {
+      throw new RangeError(`${fieldPath}.${key} must be a finite non-negative number.`);
+    }
+    parsed[key] = candidate;
+  }
+  return parsed;
 }
 
 export function validateChordQuality(value: unknown): value is ReturnType<typeof getSupportedChordQualities>[number] {
