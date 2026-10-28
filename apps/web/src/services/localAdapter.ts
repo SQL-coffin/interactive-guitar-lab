@@ -5,13 +5,14 @@ import {
   getSupportedChordQualities,
   searchVoicings,
 } from "@interactive-guitar-lab/music-theory";
-import { toServiceError } from "./errors";
+import { ServiceError, toServiceError } from "./errors";
 import type { GuitarLabService, RequestOptions } from "./guitarLabService";
+import { optimizeProgressionInProcess } from "./progressionOptimizer";
 
 /**
- * Temporary adapter used until the HTTP API exists: it delegates to the shared engine
- * in-process and reproduces the HTTP contract's async/error semantics, so swapping in
- * the HTTP adapter requires no UI changes. It contains no theory logic of its own.
+ * Offline adapter (tests, Storybook-style development): delegates to the shared engine
+ * in-process with the HTTP contract's async/error semantics. It contains no theory logic of
+ * its own. Audio analysis needs the server-side worker, so it is unavailable here.
  */
 export function createLocalGuitarLabService(): GuitarLabService {
   async function run<T>(options: RequestOptions | undefined, compute: () => T): Promise<T> {
@@ -35,5 +36,11 @@ export function createLocalGuitarLabService(): GuitarLabService {
         const resolvedTuning = [...(tuning ?? STANDARD_GUITAR_TUNING)];
         return { tuning: resolvedTuning, maxFret, positions: getFretboard({ tuning: resolvedTuning, maxFret }) };
       }),
+    analyzeAudio: () =>
+      Promise.reject(new ServiceError(
+        "internal_error",
+        "Audio analysis needs the server API (POST /api/audio-analysis); the offline adapter cannot run it.",
+      )),
+    optimizeProgression: optimizeProgressionInProcess,
   };
 }

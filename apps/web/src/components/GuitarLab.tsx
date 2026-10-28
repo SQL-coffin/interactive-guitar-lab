@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useMemo, useReducer } from "react";
-import type { BuiltChord, ChordQuality, FretboardResponse, VoicingSearchResult } from "@/services";
+import { useFretboardData, FRETBOARD_FRETS } from "@/state/useFretboardData";
+import { voicingTab } from "@/lib/diagram";
+import { PageIntro } from "./AppShell/PageIntro";
+import { Button } from "./ui/Button";
+import { FretboardLegend } from "./Fretboard/FretboardLegend";
+import { VoicingBreakdown } from "./Voicings/VoicingBreakdown";
+import { TransitionSummary } from "./Voicings/TransitionSummary";
+import type { BuiltChord, ChordQuality, VoicingSearchResult } from "@/services";
 import { useGuitarLabService } from "@/state/ServiceContext";
 import { useAsyncResource } from "@/state/useAsyncResource";
 import { INITIAL_EXPLORER_STATE, explorerReducer, toSearchOptions, type LabelMode } from "@/state/explorerState";
@@ -17,11 +24,9 @@ import { Fretboard } from "./Fretboard/Fretboard";
 import { FretboardInspector } from "./Fretboard/FretboardInspector";
 import { ChordSummary } from "./ChordSummary/ChordSummary";
 import { VoicingResults } from "./Voicings/VoicingResults";
-import { DegreeLegend } from "./DegreeLegend";
 import styles from "./GuitarLab.module.css";
 
-/** Frets drawn on the interactive board (independent of the voicing search range). */
-export const FRETBOARD_FRETS = 15;
+export { FRETBOARD_FRETS };
 
 const LABEL_MODES: ReadonlyArray<{ value: LabelMode; label: string }> = [
   { value: "degree", label: "Degrees" },
@@ -36,9 +41,7 @@ export function GuitarLab() {
   const { root, quality, constraints, labelMode } = state;
 
   const qualities = useAsyncResource<ChordQuality[]>("qualities", (signal) => service.listChordQualities({ signal }));
-  const fretboard = useAsyncResource<FretboardResponse>(`fretboard:${FRETBOARD_FRETS}`, (signal) =>
-    service.getFretboard({ maxFret: FRETBOARD_FRETS }, { signal }),
-  );
+  const { fretboard, openStringNames, stringCount } = useFretboardData();
   const chord = useAsyncResource<BuiltChord>(`chord:${root}:${quality}`, (signal) =>
     service.getChord({ root, quality }, { signal }),
   );
@@ -48,36 +51,34 @@ export function GuitarLab() {
     (signal) => service.searchVoicings({ root, quality, options: searchOptions }, { signal }),
   );
 
-  const openStringNames = useMemo(
-    () => new Map(fretboard.status === "success" ? fretboard.data.positions.filter((p) => p.fret === 0).map((p) => [p.string, p.noteName]) : []),
-    [fretboard],
-  );
-  const stringCount = fretboard.status === "success" ? fretboard.data.tuning.length : 6;
   const chordData = chord.status === "success" ? chord.data : undefined;
   const voicingData = voicings.status === "success" ? voicings.data : undefined;
   const selectedVoicing =
     state.selectedVoicing !== null ? voicingData?.results[state.selectedVoicing] : undefined;
 
+  const compareVoicing =
+    state.compareVoicing !== null ? voicingData?.results[state.compareVoicing] : undefined;
+  const compareLabel = state.compareVoicing !== null ? `voicing ${state.compareVoicing + 1} (compare)` : "comparison voicing";
+  const symbol = chordData ? displaySpelling(chordData.symbol) : "";
+  const fretboardDescription = selectedVoicing
+    ? `Solid markers: voicing ${(state.selectedVoicing ?? 0) + 1}. Outlined: every other ${symbol} chord tone.${compareVoicing ? ` Dashed: ${compareLabel}.` : ""}`
+    : chordData
+      ? `Every ${symbol} chord tone up to fret ${FRETBOARD_FRETS}.`
+      : undefined;
+
   const selectVoicing = useCallback((index: number | null) => dispatch({ type: "selectVoicing", index }), []);
+  const compare = useCallback((index: number | null) => dispatch({ type: "compareVoicing", index }), []);
   const resetConstraints = useCallback(() => dispatch({ type: "resetConstraints" }), []);
 
   return (
-    <div className={styles.shell}>
-      <header className={styles.header}>
-        <div className={styles.brand}>
-          <span className={styles.logo} aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 6h16M4 10h16M4 14h16M4 18h16" stroke="currentColor" strokeWidth="1.6" /><circle cx="9" cy="12" r="2.6" fill="currentColor" /><circle cx="15" cy="16" r="2.6" fill="currentColor" /></svg>
-          </span>
-          <div>
-            <h1 className={styles.title}>Guitar Theory Lab</h1>
-            <p className={styles.tagline}>Build a chord, see it on the neck, and explore playable voicings.</p>
-          </div>
-        </div>
-      </header>
+    <>
+      <PageIntro title="Chord explorer">
+        Pick a root and quality, see every chord tone on the neck, and compare playable voicings string by string.
+      </PageIntro>
 
-      <main className={styles.layout}>
+      <div className={styles.layout}>
         <aside className={styles.sidebar} aria-label="Chord explorer controls">
-          <Panel title="Chord explorer" titleId="explorer-title">
+          <Panel title="Chord" titleId="explorer-title">
             <div className={styles.stack}>
               <RootSelector
                 root={root}
@@ -106,21 +107,20 @@ export function GuitarLab() {
           <Panel
             title="Fretboard"
             titleId="fretboard-title"
-            description={
-              selectedVoicing
-                ? `Showing voicing ${(state.selectedVoicing ?? 0) + 1} of ${displaySpelling(selectedVoicing.chordSymbol)}; outlined dots mark every other ${displaySpelling(selectedVoicing.chordSymbol)} chord tone.`
-                : chordData
-                  ? `Every ${displaySpelling(chordData.symbol)} chord tone up to fret ${FRETBOARD_FRETS}.`
-                  : undefined
-            }
+            description={fretboardDescription}
             actions={
-              <SegmentedControl
-                label="Marker labels"
-                hideLabel
-                value={labelMode}
-                options={LABEL_MODES}
-                onChange={(next) => dispatch({ type: "setLabelMode", labelMode: next })}
-              />
+              <>
+                {compareVoicing ? (
+                  <Button size="sm" variant="ghost" onClick={() => compare(null)}>Stop comparing</Button>
+                ) : null}
+                <SegmentedControl
+                  label="Marker labels"
+                  hideLabel
+                  value={labelMode}
+                  options={LABEL_MODES}
+                  onChange={(next) => dispatch({ type: "setLabelMode", labelMode: next })}
+                />
+              </>
             }
           >
             {fretboard.status === "error" ? (
@@ -133,11 +133,13 @@ export function GuitarLab() {
                   maxFret={fretboard.data.maxFret}
                   chord={chordData}
                   voicing={selectedVoicing}
+                  compareVoicing={compareVoicing}
+                  compareLabel={compareLabel}
                   labelMode={labelMode}
                   selection={selection}
                   onSelectionChange={dispatchSelection}
                 />
-                <DegreeLegend chord={chordData} />
+                <FretboardLegend chord={chordData} showVoicing={!!selectedVoicing} compareLabel={compareVoicing ? compareLabel : undefined} />
                 <FretboardInspector
                   positions={fretboard.data.positions}
                   stringCount={stringCount}
@@ -151,35 +153,50 @@ export function GuitarLab() {
             )}
           </Panel>
 
+          {selectedVoicing ? (
+            <Panel
+              title="Why this voicing works"
+              titleId="breakdown-title"
+              description={`Voicing ${(state.selectedVoicing ?? 0) + 1} (${voicingTab(selectedVoicing)}): every sounding string plays a ${displaySpelling(selectedVoicing.chordSymbol)} chord tone.`}
+            >
+              <VoicingBreakdown voicing={selectedVoicing} chord={chordData} openStringNames={openStringNames} />
+              {compareVoicing ? (
+                <TransitionSummary
+                  from={selectedVoicing}
+                  to={compareVoicing}
+                  fromLabel={`voicing ${(state.selectedVoicing ?? 0) + 1}`}
+                  toLabel={compareLabel}
+                />
+              ) : null}
+            </Panel>
+          ) : null}
+
           <div className={styles.lower}>
-            <Panel title="Chord" titleId="chord-title" className={styles.chordPanel}>
+            <Panel title="Chord tones" titleId="chord-title" className={styles.chordPanel}>
               <ChordSummary chord={chord} onRetry={chord.retry} />
             </Panel>
 
             <Panel
               title="Voicings"
               titleId="voicings-title"
-              description="Pick a voicing to pin it on the fretboard."
+              description="Show a voicing on the fretboard, or compare it against the one already shown."
               className={styles.voicingsPanel}
             >
               <VoicingResults
                 result={voicings}
                 selectedIndex={state.selectedVoicing}
+                compareIndex={state.compareVoicing}
                 labelMode={labelMode}
                 openStringNames={openStringNames}
                 onSelect={selectVoicing}
+                onCompare={compare}
                 onRetry={voicings.retry}
                 onResetConstraints={resetConstraints}
               />
             </Panel>
           </div>
         </div>
-      </main>
-
-      <footer className={styles.footer}>
-        Voicing ranking is a heuristic, not a guarantee of the best fingering. String numbers follow guitar convention
-        (string 1 = high E).
-      </footer>
-    </div>
+      </div>
+    </>
   );
 }

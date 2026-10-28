@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { AppHeader } from "@/components/AppShell/AppHeader";
+import { GuitarLabServiceProvider } from "@/state/ServiceContext";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Guitar Theory Lab",
-  description: "Interactive guitar fretboard, chord explorer and voicing search.",
+  title: { default: "Guitar Theory Lab", template: "%s · Guitar Theory Lab" },
+  description: "Interactive guitar fretboard, chord explorer, progression builder and audio chord analysis.",
 };
 
 export const viewport: Viewport = {
@@ -15,7 +17,17 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <a href="#main" className="skip-link">Skip to content</a>
+        <AppHeader />
+        <GuitarLabServiceProvider>
+          <main id="main" className="page">{children}</main>
+        </GuitarLabServiceProvider>
+        <footer className="site-footer">
+          Rankings and audio hypotheses are heuristics from the analysis engine, not guarantees. String numbers follow
+          guitar convention (string 1 = highest pitch).
+        </footer>
+      </body>
     </html>
   );
 }

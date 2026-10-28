@@ -1,8 +1,8 @@
 /**
  * Provisional frontend ⇄ backend contract.
  *
- * Every payload type is re-exported from the engine packages (type-only) so the UI cannot drift
- * from the engine's shapes. When packages/contracts lands, these aliases should be repointed there.
+ * Payload types are re-exported from the engine packages (type-only) so the UI cannot drift from
+ * the engine's shapes. A dedicated contracts package can be introduced if API consumers expand.
  */
 import type {
   AnalyzeAudioForChordsResult,
@@ -101,6 +101,18 @@ export interface ProgressionOptimizationRequest {
   options?: ProgressionOptimizationOptions;
 }
 export type ProgressionOptimizationResponse = ProgressionOptimizationResult;
+
+/**
+ * Request bounds enforced by POST /api/progressions/optimize (documented in
+ * docs/frontend-api-contract.md). The UI sizes its requests to stay within them;
+ * `apiRoutes.integration.test.ts` fails if the route and these values drift apart.
+ */
+export const PROGRESSION_OPTIMIZE_LIMITS = {
+  maxLayers: 12,
+  maxCandidatesPerLayer: 32,
+  maxTotalCandidates: 192,
+  maxResultLimit: 20,
+} as const;
 
 /** Error body for every non-2xx response. */
 export interface ApiErrorBody {

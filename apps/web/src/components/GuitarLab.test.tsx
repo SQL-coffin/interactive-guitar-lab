@@ -19,7 +19,7 @@ const voicingsRegion = () => screen.getByRole("region", { name: "Voicings" });
 describe("GuitarLab", () => {
   it("loads C major with tones, fretboard markers and ranked voicings", async () => {
     renderLab();
-    const chord = screen.getByRole("region", { name: "Chord" });
+    const chord = screen.getByRole("region", { name: "Chord tones" });
     expect(await within(chord).findByLabelText("Chord C")).toBeInTheDocument();
     expect(within(chord).getByText("1 – 3 – 5")).toBeInTheDocument();
 
