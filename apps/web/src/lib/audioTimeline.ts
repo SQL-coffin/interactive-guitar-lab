@@ -59,6 +59,24 @@ export function pathSymbolsByFrame(
   );
 }
 
+/**
+ * The window that contains `seconds`, or the nearest one when it falls in a gap or past the
+ * ends. Null only when there are no windows.
+ */
+export function segmentIndexAt(segments: readonly TimelineSegment[], seconds: number): number | null {
+  let nearest: number | null = null;
+  let nearestDistance = Infinity;
+  for (const segment of segments) {
+    if (seconds >= segment.startSeconds && seconds < segment.endSeconds) return segment.frameIndex;
+    const distance = Math.min(Math.abs(seconds - segment.startSeconds), Math.abs(seconds - segment.endSeconds));
+    if (distance < nearestDistance) {
+      nearest = segment.frameIndex;
+      nearestDistance = distance;
+    }
+  }
+  return nearest;
+}
+
 export function formatSeconds(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "–:––";
   const whole = Math.floor(seconds);

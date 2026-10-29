@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import type { ChromaProgressionAnalysisOptions } from "@/services";
-import { buildTimeline, formatSeconds, pathSymbolsByFrame, formatBytes } from "@/lib/audioTimeline";
+import type { ChromaProgressionAnalysisOptions, KeyChangeEvent } from "@/services";
+import { buildTimeline, formatSeconds, pathSymbolsByFrame, formatBytes, segmentIndexAt } from "@/lib/audioTimeline";
 import { displaySpelling } from "@/lib/roots";
 import type { LabelMode } from "@/state/explorerState";
 import { useLab } from "@/state/lab/LabSessionProvider";
@@ -14,6 +14,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { EmptyState, ErrorState } from "@/components/ui/StatusMessage";
 import { AudioFilePicker } from "./AudioFilePicker";
 import { AudioTimeline } from "./AudioTimeline";
+import { KeyChangePanel } from "./KeyChangePanel";
 import { SegmentInspector } from "./SegmentInspector";
 import { RecentAnalyses } from "./RecentAnalyses";
 import { SessionProgression } from "./SessionProgression";
@@ -57,6 +58,8 @@ export function AudioAnalysis() {
   const [pathIndex, setPathIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [view, setView] = useState<View>("analysis");
+  // A seek requested while the player is not mounted (e.g. from the Score view) is applied once it is.
+  const [pendingSeek, setPendingSeek] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   // Playback uses the in-memory file for this session only; audio is never stored.
@@ -140,6 +143,21 @@ export function AudioAnalysis() {
     const segment = segments[frameIndex];
     if (segment && audioRef.current) audioRef.current.currentTime = segment.startSeconds;
   };
+
+  // Show a candidate key change on the timeline: select its window, then seek to the estimate itself.
+  const showKeyChange = (event: KeyChangeEvent) => {
+    const frameIndex = segmentIndexAt(segments, event.timeSeconds);
+    if (frameIndex !== null) selectFrame(frameIndex);
+    setView("analysis");
+    setCurrentTime(event.timeSeconds);
+    setPendingSeek(event.timeSeconds);
+  };
+  useEffect(() => {
+    if (pendingSeek === null || view !== "analysis") return;
+    if (audioRef.current) audioRef.current.currentTime = pendingSeek;
+    setPendingSeek(null);
+    document.getElementById("timeline-title")?.scrollIntoView({ block: "start" });
+  }, [pendingSeek, view]);
 
   const progress = state.status === "uploading" && state.total ? Math.round((state.loaded / state.total) * 100) : null;
 
@@ -307,6 +325,12 @@ export function AudioAnalysis() {
               )}
             </Panel>
           ) : null}
+
+          <KeyChangePanel
+            detection={result.keyChangeDetection}
+            durationSeconds={result.audio.durationSeconds}
+            onSelectEvent={showKeyChange}
+          />
 
           <div className={styles.viewSwitch}>
             <SegmentedControl label="Analysis view" hideLabel value={view} options={VIEWS} onChange={setView} />
