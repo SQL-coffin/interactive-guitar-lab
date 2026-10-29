@@ -116,6 +116,29 @@ describe("audio-analysis work budget", () => {
     expect(body.chordAnalysis.optimization.results).toHaveLength(3);
   });
 
+  it("validates and forwards the auto window strategy", async () => {
+    const worker = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const formData = init?.body as FormData;
+      expect(formData.get("windowStrategy")).toBe("auto");
+      return workerResponse(4);
+    });
+    vi.stubGlobal("fetch", worker);
+    const response = await postAudioAnalysis(form({ windowStrategy: "auto" }));
+    expect(response.status).toBe(200);
+    expect(worker).toHaveBeenCalledOnce();
+  });
+
+  it("rejects an unsupported window strategy before calling the worker", async () => {
+    const worker = vi.fn();
+    vi.stubGlobal("fetch", worker);
+    const response = await postAudioAnalysis(form({ windowStrategy: "guess" }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { code: "invalid_request", message: "windowStrategy must be either manual or auto." },
+    });
+    expect(worker).not.toHaveBeenCalled();
+  });
+
   it("rejects an excessive candidate product before calling the worker", async () => {
     const worker = vi.fn();
     vi.stubGlobal("fetch", worker);

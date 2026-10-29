@@ -8,7 +8,7 @@ import numpy as np
 import soundfile as sf
 from fastapi.testclient import TestClient
 
-from app import ChromaResponse, app, build_analysis_intervals, extract_chroma_features, infer_meter_from_beat_strengths
+from app import ChromaResponse, app, build_adaptive_analysis_intervals, build_analysis_intervals, extract_chroma_features, infer_meter_from_beat_strengths
 
 
 def make_wav(frequency_hz: float = 440.0, duration_seconds: float = 2.0) -> bytes:
@@ -172,6 +172,41 @@ class AudioWorkerTests(unittest.TestCase):
         self.assertEqual(mode, "beat-aligned")
         self.assertTrue(all(abs((end - start) - 0.5) < 0.001 for start, end in intervals))
 
+    def test_auto_window_splits_at_chroma_change_but_keeps_stable_regions_coarse(self) -> None:
+        sample_rate = 100
+        frame_times = np.arange(401, dtype=np.float64) / sample_rate
+        chroma = np.zeros((12, frame_times.size), dtype=np.float32)
+        chroma[0, frame_times < 1.0] = 1.0  # C pitch class
+        chroma[7, frame_times >= 1.0] = 1.0  # G pitch class
+        intervals, mode = build_adaptive_analysis_intervals(
+            4.0, [i * 0.5 for i in range(9)], 4, [0.0, 2.0], chroma, frame_times
+        )
+        self.assertEqual(mode, "adaptive-beat-aligned")
+        self.assertIn((0.0, 1.0), intervals)
+        self.assertIn((1.0, 2.0), intervals)
+        self.assertIn((2.0, 4.0), intervals)
+        self.assertLess(len(intervals), 8)
+
+    def test_auto_window_can_keep_unknown_meter_stable_spans_coarse(self) -> None:
+        frame_times = np.arange(401, dtype=np.float64) / 100
+        chroma = np.zeros((12, frame_times.size), dtype=np.float32)
+        chroma[0, :] = 1.0
+        intervals, mode = build_adaptive_analysis_intervals(
+            4.0, [i * 0.5 for i in range(9)], None, [], chroma, frame_times
+        )
+        self.assertEqual(mode, "adaptive-beat-aligned")
+        self.assertTrue(any(end - start >= 0.9 for start, end in intervals))
+        self.assertLess(len(intervals), 8)
+
+    def test_auto_window_falls_back_without_beats(self) -> None:
+        chroma = np.zeros((12, 401), dtype=np.float32)
+        frame_times = np.arange(401, dtype=np.float64) / 100
+        intervals, mode = build_adaptive_analysis_intervals(
+            4.0, [], None, [], chroma, frame_times
+        )
+        self.assertEqual(mode, "fixed-window")
+        self.assertEqual(intervals, [(0.0, 1.0), (1.0, 2.0), (2.0, 3.0), (3.0, 4.0)])
+
     def test_falls_back_to_fixed_windows_when_beats_are_unavailable(self) -> None:
         intervals, mode = build_analysis_intervals(2.0, 0.5, [], None, [])
         self.assertEqual(mode, "fixed-window")
@@ -211,6 +246,20 @@ class AudioWorkerTests(unittest.TestCase):
         self.assertTrue(all(frame["endSeconds"] > frame["startSeconds"] for frame in payload["frames"]))
         self.assertEqual(len(payload["frames"]), 4)
         self.assertEqual(len(payload["frames"][0]["chroma"]), 12)
+
+    def test_http_endpoint_accepts_auto_window_strategy(self) -> None:
+        response = http_request(
+            "post",
+            "/v1/features/chroma",
+            files={"file": ("demo.wav", make_wav(duration_seconds=2.0), "audio/wav")},
+            data={"windowStrategy": "auto"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["windowStrategy"], "auto")
+        self.assertIn(payload["windowSeconds"], (1.0, 2.0))
+        self.assertIn(payload["windowingMode"], ("fixed-window", "adaptive-beat-aligned"))
+        self.assertTrue(all(frame["endSeconds"] > frame["startSeconds"] for frame in payload["frames"]))
 
     def test_health_endpoint(self) -> None:
         response = http_request("get", "/health")

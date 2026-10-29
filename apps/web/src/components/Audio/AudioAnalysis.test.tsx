@@ -25,6 +25,7 @@ const fixture: AudioAnalysisResponse = {
     durationSeconds: 4,
     sampleRate: 22050,
     windowSeconds: 1,
+    windowStrategy: "manual",
     windowingMode: "fixed-window" as const,
     rhythm: { tempoBpm: 96, beatTimesSeconds: [0.5, 1.1, 1.7], timeSignatureNumerator: null, timeSignatureDenominator: null, meterConfidence: null, barDurationSeconds: null, downbeatTimesSeconds: [] },
   },

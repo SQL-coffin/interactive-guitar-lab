@@ -133,11 +133,12 @@ export function createHttpGuitarLabService(
       if (tuning) query.set("tuning", tuning.join(","));
       return expectShape<FretboardResponse>(await get(`/fretboard?${query}`, options?.signal), isFretboardResponse, "fretboard");
     },
-    async analyzeAudio({ file, filename, windowSeconds, options }: AudioAnalysisRequest, requestOptions) {
+    async analyzeAudio({ file, filename, windowSeconds, windowStrategy, options }: AudioAnalysisRequest, requestOptions) {
       const form = new FormData();
       if (filename === undefined) form.append("file", file);
       else form.append("file", file, filename);
       if (windowSeconds !== undefined) form.append("windowSeconds", String(windowSeconds));
+      if (windowStrategy !== undefined) form.append("windowStrategy", windowStrategy);
       if (options !== undefined) form.append("options", JSON.stringify(options));
       return expectShape<AudioAnalysisResponse>(
         await upload("/audio-analysis", form, requestOptions),

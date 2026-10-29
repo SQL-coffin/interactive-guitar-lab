@@ -5,6 +5,7 @@ export interface AudioWorkerClientOptions {
   baseUrl: string;
   filename: string;
   windowSeconds?: number;
+  windowStrategy?: "manual" | "auto";
   timeoutMs?: number;
   /** Aborts the worker request early, e.g. when the HTTP client that started it disconnects. */
   signal?: AbortSignal;
@@ -17,7 +18,8 @@ export interface AudioFeatureResponse {
   sampleRate: number;
   /** Target duration requested by the client; individual frame durations may follow the beat grid. */
   windowSeconds: number;
-  windowingMode: "beat-aligned" | "fixed-window";
+  windowingMode: "adaptive-beat-aligned" | "beat-aligned" | "fixed-window";
+  windowStrategy: "manual" | "auto";
   rhythm: {
     tempoBpm: number | null;
     beatTimesSeconds: number[];
@@ -54,11 +56,13 @@ function parseFeatureResponse(value: unknown): AudioFeatureResponse {
     throw new AudioWorkerError("Audio worker returned an unsupported feature response.", null);
   }
   const windowingMode = value.windowingMode ?? "fixed-window";
+  const windowStrategy = value.windowStrategy ?? "manual";
   if (typeof value.filename !== "string"
       || typeof value.durationSeconds !== "number" || !Number.isFinite(value.durationSeconds)
       || typeof value.sampleRate !== "number" || !Number.isInteger(value.sampleRate)
       || typeof value.windowSeconds !== "number" || !Number.isFinite(value.windowSeconds)
-      || (windowingMode !== "beat-aligned" && windowingMode !== "fixed-window")) {
+      || (windowingMode !== "adaptive-beat-aligned" && windowingMode !== "beat-aligned" && windowingMode !== "fixed-window")
+      || (windowStrategy !== "manual" && windowStrategy !== "auto")) {
     throw new AudioWorkerError("Audio worker returned invalid audio metadata.", null);
   }
 
@@ -119,6 +123,7 @@ function parseFeatureResponse(value: unknown): AudioFeatureResponse {
     sampleRate: value.sampleRate,
     windowSeconds: value.windowSeconds,
     windowingMode,
+    windowStrategy,
     rhythm: {
       tempoBpm,
       beatTimesSeconds: beatTimesSeconds as number[],
@@ -160,6 +165,7 @@ export async function extractAudioFeatures(
   const form = new FormData();
   form.append("file", audio, input.filename || "audio-upload");
   form.append("windowSeconds", String(windowSeconds));
+  if (input.windowStrategy !== undefined) form.append("windowStrategy", input.windowStrategy);
 
   let response: Response;
   try {
