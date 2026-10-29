@@ -65,10 +65,39 @@ export function isProgressionOptimizationResponse(value: unknown): value is Prog
   );
 }
 
+
+function isKeyAnalysisResult(value: unknown): boolean {
+  if (!isRecord(value)
+      || !["identified", "ambiguous", "insufficient-evidence"].includes(String(value.status))
+      || !Array.isArray(value.candidates)
+      || typeof value.explanation !== "string"
+      || !(value.scoreMargin === null || isNumber(value.scoreMargin))
+      || !(value.ambiguityKind === null
+        || value.ambiguityKind === "relative-major-minor"
+        || value.ambiguityKind === "competing-keys")
+      || !isRecord(value.evidence)
+      || !isNumber(value.evidence.activeDurationSeconds)
+      || !Array.isArray(value.evidence.observedPitchClasses)
+      || !value.evidence.observedPitchClasses.every((pitchClass) => Number.isInteger(pitchClass) && pitchClass >= 0 && pitchClass < 12)) {
+    return false;
+  }
+  return value.candidates.every((candidate) =>
+    isRecord(candidate)
+    && typeof candidate.tonic === "string"
+    && Number.isInteger(candidate.tonicPitchClass)
+    && Number(candidate.tonicPitchClass) >= 0
+    && Number(candidate.tonicPitchClass) < 12
+    && (candidate.mode === "major" || candidate.mode === "minor")
+    && typeof candidate.label === "string"
+    && isNumber(candidate.score),
+  );
+}
+
 export function isAudioAnalysisResponse(value: unknown): value is AudioAnalysisResponse {
   if (!isRecord(value) || !isRecord(value.audio) || !isRecord(value.chordAnalysis)) return false;
   const { audio, chordAnalysis } = value;
-  return isNumber(audio.durationSeconds)
+  return (value.keyAnalysis === undefined || isKeyAnalysisResult(value.keyAnalysis))
+    && isNumber(audio.durationSeconds)
     && isNumber(audio.windowSeconds)
     && isRecord(audio.rhythm)
     && Array.isArray(audio.rhythm.beatTimesSeconds)
