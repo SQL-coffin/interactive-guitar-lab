@@ -164,6 +164,7 @@ describe("audio worker HTTP client", () => {
     });
 
     expect(result.audio.durationSeconds).toBe(1);
+    expect(result.keyAnalysis?.status).toBe("insufficient-evidence");
     expect(result.chordAnalysis.frameResults).toHaveLength(2);
     expect(result.chordAnalysis.optimization!.results[0]!.steps.map((step) => step.chordSymbol))
       .toEqual(["AMaj7", "F#m7"]);
