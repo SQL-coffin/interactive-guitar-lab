@@ -653,3 +653,31 @@
   display: flex;
   justify-content: flex-start;
 }
+
+
+/* ---------- Key estimate ---------- */
+.keyCandidates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.keyCandidate {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.keyCandidate[data-ambiguous="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.keyName {
+  font-weight: 750;
+  font-size: 1rem;
+}
