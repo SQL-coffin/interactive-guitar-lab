@@ -139,7 +139,7 @@ export function analyzeKeyCandidates(
     activeDurationSeconds += duration;
     chroma.forEach((value, pitchClass) => {
       if (value > maximum * PITCH_ACTIVITY_RATIO) observedPitchClasses.add(pitchClass);
-      pitchProfile[pitchClass] += (value / energy) * duration;
+      pitchProfile[pitchClass] = (pitchProfile[pitchClass] ?? 0) + (value / energy) * duration;
     });
   }
 

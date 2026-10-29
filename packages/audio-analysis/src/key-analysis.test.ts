@@ -37,7 +37,7 @@ describe("analyzeKeyCandidates", () => {
 
     expect(result.status).toBe("insufficient-evidence");
     expect(result.candidates).toEqual([]);
-    expect(result.explanation).toMatch(/not enough/i);
+    expect(result.explanation).toMatch(/isn't enough/i);
   });
 
   it("rejects invalid ambiguity thresholds", () => {
