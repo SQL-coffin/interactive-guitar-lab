@@ -63,6 +63,23 @@ describe("analysis session survives navigation (regression)", () => {
     expect(analyze).toHaveBeenCalledTimes(1);
   });
 
+  it("persists the selected window strategy with an analysis session", async () => {
+    const { user, analyze, repository, fixture } = setup(async () => ({
+      ...fixture,
+      audio: { ...fixture.audio, windowStrategy: "auto", windowingMode: "adaptive-beat-aligned" },
+    }));
+    await user.upload(await screen.findByLabelText(/Choose audio file/), wav());
+    await user.selectOptions(screen.getByLabelText("Window strategy"), "auto");
+    await user.click(screen.getByRole("button", { name: "Analyze recording" }));
+    expect(await screen.findByText("Auto · adaptive beat-aligned")).toBeInTheDocument();
+    expect(analyze.mock.calls[0]![0]).toMatchObject({ windowStrategy: "auto" });
+    await waitFor(async () => expect(await repository.listSessions()).toHaveLength(1));
+    const summary = (await repository.listSessions())[0]!;
+    const saved = (await repository.getSession(summary.id))!;
+    expect(saved.request.windowStrategy).toBe("auto");
+    expect(saved.result.audio.windowStrategy).toBe("auto");
+  });
+
   it("does not abort an analysis that is still running when the user navigates away", async () => {
     let finish: (value: AudioAnalysisResponse) => void = () => {};
     let signal: AbortSignal | undefined;
