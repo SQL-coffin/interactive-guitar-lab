@@ -33,7 +33,7 @@ export function useAudioAnalysis(service: GuitarLabService) {
   useEffect(() => () => controllerRef.current?.abort(), []);
 
   const analyze = useCallback(
-    async (file: File, windowSeconds: number, options: ChromaProgressionAnalysisOptions): Promise<AudioAnalysisResponse | undefined> => {
+    async (file: File, windowSeconds: number, options: ChromaProgressionAnalysisOptions, windowStrategy: "manual" | "auto" = "manual"): Promise<AudioAnalysisResponse | undefined> => {
       const invalid = validateAudioFile(file);
       if (invalid) {
         setState({ status: "error", fileName: file.name, error: invalid });
@@ -45,7 +45,7 @@ export function useAudioAnalysis(service: GuitarLabService) {
       setState({ status: "uploading", fileName: file.name, loaded: 0, total: file.size });
       try {
         const result = await service.analyzeAudio(
-          { file, windowSeconds, options },
+          { file, windowSeconds, windowStrategy, options },
           {
             signal: controller.signal,
             onUploadProgress: ({ loaded, total }) => {
