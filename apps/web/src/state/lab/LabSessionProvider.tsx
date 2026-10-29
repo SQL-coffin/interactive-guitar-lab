@@ -87,7 +87,7 @@ interface LabContextValue {
   activeSession: AnalysisSession | null;
   sessionError: string | null;
   run: AudioAnalysisState;
-  analyze: (file: File, windowSeconds: number, options: ChromaProgressionAnalysisOptions) => Promise<void>;
+  analyze: (file: File, windowSeconds: number, options: ChromaProgressionAnalysisOptions, windowStrategy?: "manual" | "auto") => Promise<void>;
   cancelAnalysis: () => void;
   /** In-memory only: the file the user picked, for playback. Never persisted. */
   audio: { file: File; sessionId: string | null } | null;
@@ -250,16 +250,16 @@ export function LabSessionProvider({ children, repository }: { children: ReactNo
     setSavedProgressions(progressionList);
   }, []);
 
-  const analyze = useCallback(async (file: File, windowSeconds: number, options: ChromaProgressionAnalysisOptions) => {
+  const analyze = useCallback(async (file: File, windowSeconds: number, options: ChromaProgressionAnalysisOptions, windowStrategy: "manual" | "auto" = "manual") => {
     setAudio({ file, sessionId: null });
-    const result = await runAnalysis(file, windowSeconds, options);
+    const result = await runAnalysis(file, windowSeconds, options, windowStrategy);
     if (!result) return;
     const session: AnalysisSession = {
       schemaVersion: 1,
       id: newId(),
       createdAt: new Date().toISOString(),
       source: { filename: file.name, sizeBytes: file.size, mimeType: file.type },
-      request: { windowSeconds, options },
+      request: { windowSeconds, windowStrategy, options },
       result,
     };
     setActiveSession(session);
