@@ -17,7 +17,7 @@ export interface AnalysisSession {
   createdAt: string;
   source: { filename: string; sizeBytes: number; mimeType: string };
   /** What was sent with the request, so the analysis can be reproduced. */
-  request: { windowSeconds: number; options: ChromaProgressionAnalysisOptions };
+  request: { windowSeconds: number; windowStrategy?: "manual" | "auto"; options: ChromaProgressionAnalysisOptions };
   result: Readonly<AudioAnalysisResponse>;
 }
 

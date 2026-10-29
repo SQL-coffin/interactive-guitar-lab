@@ -94,6 +94,27 @@ describe("AudioAnalysis", () => {
     expect(screen.getByRole("region", { name: /Window 3/ })).toHaveTextContent(/silent/);
   });
 
+  it("forwards Auto mode and explains the adaptive result", async () => {
+    let finish: (value: AudioAnalysisResponse) => void = () => {};
+    const analyze = vi.fn<GuitarLabService["analyzeAudio"]>(() => new Promise((resolve) => { finish = resolve; }));
+    renderAudio(analyze);
+    const user = userEvent.setup();
+    await user.upload(screen.getByLabelText(/Choose audio file/), wav());
+    await user.selectOptions(screen.getByLabelText("Window strategy"), "auto");
+    expect(screen.getByLabelText("Analysis window")).toBeDisabled();
+    expect(screen.getByText(/Auto chooses coarser beat-aligned windows/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Analyze recording" }));
+    expect(analyze.mock.calls[0]![0]).toMatchObject({ windowStrategy: "auto", windowSeconds: 1 });
+
+    const autoFixture: AudioAnalysisResponse = {
+      ...fixture,
+      audio: { ...fixture.audio, windowSeconds: 2, windowStrategy: "auto", windowingMode: "adaptive-beat-aligned" },
+    };
+    finish(autoFixture);
+    expect(await screen.findByText("Auto · adaptive beat-aligned")).toBeInTheDocument();
+    expect(screen.getByText(/4 · 1.00 s/)).toBeInTheDocument();
+  });
+
   it("explains a worker outage and retries", async () => {
     const analyze = vi.fn<GuitarLabService["analyzeAudio"]>()
       .mockRejectedValueOnce(new ServiceError("internal_error", "Audio analysis worker is unavailable or failed.", 502))

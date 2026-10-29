@@ -36,7 +36,7 @@ function build(spec: Spec): AudioAnalysisResponse {
   };
   const chordAnalysis = analyzeChromaProgression(frames, { chordQualities: ["major"], chordCandidateLimit: 1, voicingsPerChord: 2, progressionOptions: { limit: 1 } });
   return {
-    audio: { schemaVersion: "1.0", filename: "song.wav", durationSeconds: duration, sampleRate: 22050, windowSeconds: 0.5, windowingMode: spec.windowingMode ?? "beat-aligned", rhythm },
+    audio: { schemaVersion: "1.0", filename: "song.wav", durationSeconds: duration, sampleRate: 22050, windowSeconds: 0.5, windowStrategy: "manual", windowingMode: spec.windowingMode ?? "beat-aligned", rhythm },
     chordAnalysis,
     chordSheet: buildChordSheet(chordAnalysis.frameResults, {
       beatTimesSeconds: rhythm.beatTimesSeconds, tempoBpm: 120, beatsPerBar: spec.numerator,
