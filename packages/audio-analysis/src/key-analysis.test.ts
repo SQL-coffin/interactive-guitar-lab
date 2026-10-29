@@ -32,6 +32,34 @@ describe("analyzeKeyCandidates", () => {
     expect(result.ambiguityKind).toBeNull();
   });
 
+  it("identifies a clear A-minor cadence when the dominant chord supports the minor tonic", () => {
+    const result = analyzeKeyCandidates([
+      frame(0, 2, [9, 0, 4]),
+      frame(2, 2.5, [4, 8, 11]),
+      frame(2.5, 3, [9, 0, 4]),
+      frame(3, 5, [9, 0, 4]),
+    ]);
+
+    expect(result.status).toBe("identified");
+    expect(result.candidates.map((candidate) => candidate.label)).toEqual(["A minor"]);
+    expect(result.ambiguityKind).toBeNull();
+  });
+  it("does not mistake a single sustained triad for enough evidence to infer a song key", () => {
+    const result = analyzeKeyCandidates([frame(0, 5, [0, 4, 7])]);
+
+    expect(result.status).toBe("insufficient-evidence");
+    expect(result.candidates).toEqual([]);
+    expect(result.evidence.observedPitchClasses).toHaveLength(3);
+  });
+
+  it("shows competing non-relative keys when the best profiles are close", () => {
+    const result = analyzeKeyCandidates([frame(0, 4, [0, 2, 4, 5])]);
+
+    expect(result.status).toBe("ambiguous");
+    expect(result.ambiguityKind).toBe("competing-keys");
+    expect(result.candidates.map((candidate) => candidate.label)).toEqual(["C major", "F major"]);
+    expect(result.scoreMargin).toBeLessThanOrEqual(0.035);
+  });
   it("does not guess a key from silence", () => {
     const result = analyzeKeyCandidates([frame(0, 5, [])]);
 

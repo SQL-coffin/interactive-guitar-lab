@@ -44,6 +44,7 @@ const MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.6
 const MINOR_PROFILE = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17] as const;
 const SILENCE_EPSILON = 1e-8;
 const PITCH_ACTIVITY_RATIO = 0.1;
+const MINIMUM_OBSERVED_PITCH_CLASSES = 4;
 
 function correlation(left: readonly number[], right: readonly number[]): number {
   const leftMean = left.reduce((sum, value) => sum + value, 0) / left.length;
@@ -144,7 +145,8 @@ export function analyzeKeyCandidates(
   }
 
   const observed = [...observedPitchClasses].sort((a, b) => a - b);
-  if (activeDurationSeconds < minimumActiveDurationSeconds || observed.length < 3) {
+  // A single triad identifies a chord, not a reliable song-level tonal center.
+  if (activeDurationSeconds < minimumActiveDurationSeconds || observed.length < MINIMUM_OBSERVED_PITCH_CLASSES) {
     return insufficientEvidence(activeDurationSeconds, observed);
   }
 
