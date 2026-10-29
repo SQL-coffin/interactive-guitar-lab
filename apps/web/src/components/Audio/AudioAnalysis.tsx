@@ -27,6 +27,7 @@ const VIEWS = [
   { value: "score", label: "Score · 简谱" },
 ] as const;
 type View = (typeof VIEWS)[number]["value"];
+type WindowStrategy = "manual" | "auto";
 const LABEL_MODES: ReadonlyArray<{ value: LabelMode; label: string }> = [
   { value: "degree", label: "Degrees" },
   { value: "note", label: "Notes" },
@@ -49,6 +50,7 @@ export function AudioAnalysis() {
   const [file, setFile] = useState<File | null>(() => lab.audio?.file ?? null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [windowSeconds, setWindowSeconds] = useState<number>(1);
+  const [windowStrategy, setWindowStrategy] = useState<WindowStrategy>("manual");
   const [minNotes, setMinNotes] = useState(4);
   const [labelMode, setLabelMode] = useState<LabelMode>("degree");
   const [selectedFrame, setSelectedFrame] = useState<number | null>(null);
@@ -82,6 +84,24 @@ export function AudioAnalysis() {
   const selected = selectedFrame !== null ? segments[selectedFrame] : undefined;
   const selectedStep = selected?.stepIndex != null ? path?.steps[selected.stepIndex] : undefined;
   const previousStep = selected?.stepIndex != null && selected.stepIndex > 0 ? path?.steps[selected.stepIndex - 1] : undefined;
+  const frameDurations = useMemo(
+    () => result?.chordAnalysis.frameResults.map((frame) => Math.max(0, frame.endSeconds - frame.startSeconds)) ?? [],
+    [result],
+  );
+  const actualWindowRange = useMemo(() => {
+    if (frameDurations.length === 0) return "No frame data";
+    const minimum = Math.min(...frameDurations);
+    const maximum = Math.max(...frameDurations);
+    const format = (value: number) => `${value.toFixed(2)} s`;
+    return minimum.toFixed(2) === maximum.toFixed(2)
+      ? format(minimum)
+      : `${format(minimum)}–${format(maximum)} actual range`;
+  }, [frameDurations]);
+  const windowStrategySummary = result?.audio.windowStrategy === "auto"
+    ? result.audio.windowingMode === "adaptive-beat-aligned"
+      ? "Auto · adaptive beat-aligned"
+      : "Auto · 1 s fallback"
+    : `Manual · ${(result?.audio.windowSeconds ?? windowSeconds).toFixed(1)} s target`;
 
   // Reset the view only when a different session becomes active (not on every remount).
   const sessionId = activeSession?.id;
@@ -112,7 +132,7 @@ export function AudioAnalysis() {
       voicingSearchOptions: { maxFret: 12, maxFretSpan: 4, minNotes },
       progressionOptions: { limit: 3 },
     };
-    void lab.analyze(file, windowSeconds, options);
+    void lab.analyze(file, windowSeconds, options, windowStrategy);
   };
 
   const selectFrame = (frameIndex: number) => {
@@ -140,12 +160,24 @@ export function AudioAnalysis() {
               start();
             }}
           >
+            <label htmlFor={`${id}-strategy`}>
+              <span>Window strategy</span>
+              <select id={`${id}-strategy`} value={windowStrategy} disabled={busy} onChange={(e) => setWindowStrategy(e.target.value as WindowStrategy)}>
+                <option value="manual">Manual</option>
+                <option value="auto">Auto</option>
+              </select>
+            </label>
             <label htmlFor={`${id}-window`}>
               <span>Analysis window</span>
-              <select id={`${id}-window`} value={windowSeconds} disabled={busy} onChange={(e) => setWindowSeconds(Number(e.target.value))}>
+              <select id={`${id}-window`} value={windowSeconds} disabled={busy || windowStrategy === "auto"} onChange={(e) => setWindowSeconds(Number(e.target.value))}>
                 {WINDOW_CHOICES.map((w) => <option key={w} value={w}>{w} s</option>)}
               </select>
             </label>
+            {windowStrategy === "auto" ? (
+              <p className={styles.caveat}>
+                Auto chooses coarser beat-aligned windows in stable passages and splits near strong chord changes. Without reliable beat detection, it falls back to fixed one-second windows.
+              </p>
+            ) : null}
             <label htmlFor={`${id}-min`}>
               <span>Min strings in fingerings</span>
               <select id={`${id}-min`} value={minNotes} disabled={busy} onChange={(e) => setMinNotes(Number(e.target.value))}>
@@ -227,28 +259,23 @@ export function AudioAnalysis() {
                 <dd>{result.audio.rhythm.tempoBpm === null ? "No stable estimate" : `≈ ${result.audio.rhythm.tempoBpm.toFixed(1)} BPM`}</dd>
               </div>
               <div><dt>Beats detected</dt><dd>{result.audio.rhythm.beatTimesSeconds.length}</dd></div>
+              <div><dt>Window strategy</dt><dd>{windowStrategySummary}</dd></div>
+              <div><dt>Windows</dt><dd>{result.chordAnalysis.frameResults.length} · {actualWindowRange}</dd></div>
               {meter ? (
                 <>
                   <div><dt>Time signature</dt><dd>{timeSignatureLabel(meter)}</dd></div>
                   <div><dt>Bar length</dt><dd>{meter.barDurationSeconds === null ? "—" : `${meter.barDurationSeconds.toFixed(2)} s`}</dd></div>
                   <div><dt>Meter confidence</dt><dd>{meter.confidence === null ? "—" : `${meter.confidence.toFixed(2)} (heuristic)`}</dd></div>
-                  <div>
-                    <dt>Windows</dt>
-                    <dd>
-                      {segments.length}
-                      {meter.windowingMode === "beat-aligned"
-                        ? ` (beat-aligned, target ${result.audio.windowSeconds} s)`
-                        : ` × ${result.audio.windowSeconds} s`}
-                    </dd>
-                  </div>
                 </>
               ) : null}
               <div><dt>Silent windows</dt><dd>{result.chordAnalysis.skippedSilentFrameIndexes.length}</dd></div>
               <div><dt>Sample rate</dt><dd>{result.audio.sampleRate.toLocaleString()} Hz</dd></div>
             </dl>
             <p className={styles.caveat}>
-              Tempo and beats are best-effort estimates and can be unreliable on rubato, syncopated or sustained material.
-              Windows are fixed-length analysis intervals, not detected chord boundaries.
+              Tempo and beats are best-effort estimates and can be unreliable on rubato, syncopated or sustained material.{" "}
+              {result.audio.windowStrategy === "auto"
+                ? "Auto uses chroma changes to suggest likely chord boundaries; it may miss changes or split on other musical changes."
+                : "Manual uses the chosen target duration; actual windows may align to detected beats. Windows are not guaranteed chord boundaries."}
             </p>
           </Panel>
 
