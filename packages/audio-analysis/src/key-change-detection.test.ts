@@ -8,6 +8,12 @@ const frame = (startSeconds: number, endSeconds: number, pitchClasses: readonly 
   chroma: Array.from({ length: 12 }, (_, pitchClass) => pitchClasses.includes(pitchClass) ? 1 : 0),
 });
 
+const weightedFrame = (startSeconds: number, endSeconds: number, weights: readonly number[]): ChromaFrame => ({
+  startSeconds,
+  endSeconds,
+  chroma: Array.from({ length: 12 }, (_, pitchClass) => weights[pitchClass] ?? 0),
+});
+
 function sequence(regions: Array<{ start: number; end: number; pitches: number[] }>): ChromaFrame[] {
   const frames: ChromaFrame[] = [];
   for (let start = 0; start < regions[regions.length - 1]!.end; start += 0.5) {
@@ -44,6 +50,22 @@ describe("detectKeyChanges", () => {
     const result = detectKeyChanges(frames, { windowSeconds: 8, hopSeconds: 2, minimumPersistentWindows: 3 });
 
     expect(result.events).toHaveLength(0);
+  });
+
+  it("does not treat a relative-major/minor profile ranking flip as a key-family change", () => {
+    // Both regions contain the same F#-major / D#-minor pitch collection. The
+    // emphasis shifts between F# and D#, but that alone is not enough to claim
+    // a modulation from chroma profiles.
+    const bEmphasis = [0, 0.7, 0, 0.7, 0, 0, 1, 0, 0.7, 0, 0.7, 0.7];
+    const gSharpEmphasis = [0, 0.7, 0, 1, 0, 0, 0.7, 0, 0.7, 0, 0.7, 0.7];
+    const frames: ChromaFrame[] = [];
+    for (let start = 0; start < 48; start += 0.5) {
+      frames.push(weightedFrame(start, start + 0.5, start < 24 ? bEmphasis : gSharpEmphasis));
+    }
+
+    const result = detectKeyChanges(frames);
+    expect(result.events).toHaveLength(0);
+    expect(result.status).toBe("no-clear-change");
   });
 
   it("returns insufficient evidence for empty audio", () => {

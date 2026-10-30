@@ -40,13 +40,13 @@ export interface KeyChangeEvent {
 }
 
 export interface KeyChangeDetectionOptions {
-  /** Local analysis window size. Defaults to 12 seconds. */
+  /** Local analysis window size. Defaults to 16 seconds. */
   windowSeconds?: number;
-  /** Distance between window starts. Defaults to 2 seconds. */
+  /** Distance between window starts. Defaults to 4 seconds. */
   hopSeconds?: number;
-  /** Require this many consecutive windows to support the new region. Defaults to 2. */
+  /** Require this many consecutive windows to support the new region. Defaults to 4. */
   minimumPersistentWindows?: number;
-  /** Ignore candidate changes whose boundary is closer than this to the previous event. Defaults to 8 seconds. */
+  /** Ignore candidate changes whose boundary is closer than this to the previous event. Defaults to 20 seconds. */
   minimumEventSeparationSeconds?: number;
 }
 
@@ -94,7 +94,15 @@ function makeWindow(frames: readonly ChromaFrame[], startSeconds: number, endSec
 
 function label(window: KeyChangeWindow): string | null {
   const candidate = window.leadingCandidate;
-  return candidate ? `${candidate.tonicPitchClass}:${candidate.mode}` : null;
+  if (!candidate) return null;
+
+  // Major and its relative minor share the same pitch collection. Treat them as
+  // one family here so small profile-ranking fluctuations do not become fake
+  // modulation events. The detailed candidates remain available to the UI.
+  const relativeMajor = candidate.mode === "minor"
+    ? (candidate.tonicPitchClass + 3) % 12
+    : candidate.tonicPitchClass;
+  return `relative-family:${relativeMajor}`;
 }
 
 function confidenceFor(score: number): KeyChangeConfidence {
@@ -113,10 +121,10 @@ export function detectKeyChanges(
   options: KeyChangeDetectionOptions = {},
   chordFrames: readonly ChordInferenceResult[] = [],
 ): KeyChangeDetectionResult {
-  const windowSeconds = options.windowSeconds ?? 12;
-  const hopSeconds = options.hopSeconds ?? 2;
-  const minimumPersistentWindows = options.minimumPersistentWindows ?? 2;
-  const minimumEventSeparationSeconds = options.minimumEventSeparationSeconds ?? 8;
+  const windowSeconds = options.windowSeconds ?? 16;
+  const hopSeconds = options.hopSeconds ?? 4;
+  const minimumPersistentWindows = options.minimumPersistentWindows ?? 4;
+  const minimumEventSeparationSeconds = options.minimumEventSeparationSeconds ?? 20;
 
   if (!Number.isFinite(windowSeconds) || windowSeconds < 4) throw new RangeError("windowSeconds must be at least 4.");
   if (!Number.isFinite(hopSeconds) || hopSeconds <= 0 || hopSeconds > windowSeconds) throw new RangeError("hopSeconds must be positive and no larger than windowSeconds.");
