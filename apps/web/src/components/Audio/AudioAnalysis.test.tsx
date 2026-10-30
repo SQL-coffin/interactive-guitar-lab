@@ -115,6 +115,33 @@ describe("AudioAnalysis", () => {
     expect(screen.getByText(/4 · 1.00 s/)).toBeInTheDocument();
   });
 
+  it("shows relative major and minor alternatives when key evidence is ambiguous", async () => {
+    const ambiguousFixture: AudioAnalysisResponse = {
+      ...fixture,
+      keyAnalysis: {
+        status: "ambiguous",
+        candidates: [
+          { tonic: "C", tonicPitchClass: 0, mode: "major", label: "C major", score: 0.756 },
+          { tonic: "A", tonicPitchClass: 9, mode: "minor", label: "A minor", score: 0.712 },
+        ],
+        ambiguityKind: "relative-major-minor",
+        scoreMargin: 0.044,
+        evidence: { activeDurationSeconds: 4, observedPitchClasses: [0, 2, 4, 5, 7, 9, 11] },
+        explanation: "These relative major/minor keys share the same pitch collection. The audio does not establish one tonal center clearly enough, so both possibilities are shown.",
+      },
+    };
+    const analyze = vi.fn<GuitarLabService["analyzeAudio"]>().mockResolvedValue(ambiguousFixture);
+    renderAudio(analyze);
+    const user = userEvent.setup();
+    await user.upload(screen.getByLabelText(/Choose audio file/), wav());
+    await user.click(screen.getByRole("button", { name: "Analyze recording" }));
+
+    expect(await screen.findByRole("list", { name: "Possible keys" })).toBeInTheDocument();
+    expect(screen.getByText("C major")).toBeInTheDocument();
+    expect(screen.getByText("A minor")).toBeInTheDocument();
+    expect(screen.getByText(/does not establish one tonal center clearly enough/i)).toBeInTheDocument();
+  });
+
   it("explains a worker outage and retries", async () => {
     const analyze = vi.fn<GuitarLabService["analyzeAudio"]>()
       .mockRejectedValueOnce(new ServiceError("internal_error", "Audio analysis worker is unavailable or failed.", 502))

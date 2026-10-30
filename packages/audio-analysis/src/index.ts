@@ -4,6 +4,8 @@ export { buildChordSheet } from "./chord-sheet.js";
 export { suggestChordSheetRefinements } from "./chord-sheet-refinement.js";
 export type { ChordSheetRefinementOptions, ChordSheetRefinementSuggestion } from "./chord-sheet-refinement.js";
 export { analyzeAudioForChords } from "./analyze-audio.js";
+export { analyzeKeyCandidates } from "./key-analysis.js";
+export type { KeyAnalysisOptions, KeyAnalysisResult, KeyAnalysisStatus, KeyAmbiguityKind, MusicalKeyCandidate, MusicalKeyMode } from "./key-analysis.js";
 export { AudioWorkerError, extractAudioFeatures } from "./worker-client.js";
 export {
   AUDIO_ANALYSIS_LIMITS,

@@ -32,7 +32,7 @@ All payload types are the engine's exported types (`BuiltChord`, `VoicingSearchO
 | POST | `/api/voicings/search` | `{ root, quality, options? }` | `VoicingSearchResult` |
 | GET | `/api/fretboard?maxFret=15&tuning=40,45,50,55,59,64` | Query: `maxFret`, optional `tuning` (comma-separated MIDI) | `{ tuning, maxFret, positions }` |
 | POST | `/api/progressions/optimize` | `{ layers: ProgressionCandidateInput[][], options? }` | `ProgressionOptimizationResult` |
-| POST | /api/audio-analysis | multipart/form-data: required file; optional windowSeconds (0.1–2.0), windowStrategy (manual/auto), options JSON | { audio, chordAnalysis, chordSheet } |
+| POST | /api/audio-analysis | multipart/form-data: required file; optional windowSeconds (0.1–2.0), windowStrategy (manual/auto), options JSON | { audio, chordAnalysis, chordSheet, keyAnalysis? } |
 
 ### Progression optimization
 
@@ -92,6 +92,8 @@ The endpoint calls the Python feature worker at `AUDIO_WORKER_URL` (defaults to 
 
 Automatic windowing is selected with the optional windowStrategy form field set to auto. It uses beat-aligned coarse windows and splits them at strong chroma-novelty boundaries that suggest a chord change; known meter limits spans to supported bar subdivisions, while unknown meter limits coarse spans to at most two beats. If usable beat timestamps are unavailable, auto mode falls back to one-second fixed windows. Omit windowStrategy or pass manual to preserve the existing behavior. windowingMode distinguishes adaptive-beat-aligned, beat-aligned, and fixed-window output; consumers must always position frames from startSeconds/endSeconds.
 
+Key analysis is included as `keyAnalysis` when available. It compares the duration-weighted chroma profile with major/minor tonal templates. If the relative major and minor scores are close (for example, C major and A minor), the response status is `ambiguous` and both candidates are returned; it does not silently force one tonic. If there is too little sustained pitch content, the status is `insufficient-evidence`. Candidate scores are profile correlations, not probabilities. The field is optional in the TypeScript response shape so older saved analysis sessions and older responses remain readable.
+
 The response includes `chordSheet` schema version `1.2`, a conservative timeline derived from `chordAnalysis.frameResults`. Consecutive windows are merged only when their top-ranked chord symbols match and their timestamps are contiguous. Each event contains `chordSymbol`, `root`, `quality`, start/end times, mean confidence/score, `sourceFrameIndexes`, and best-effort beat/bar positions. Silent windows are listed in `skippedWindowIndexes` and break continuity. The rhythm object includes detected beats, estimated downbeats, `timeSignatureNumerator` / `timeSignatureDenominator`, `beatsPerBar`, and `meterConfidence`. On the audio-analysis path, `beatsPerBar` and bar positions stay null when meter is unknown; we do not silently assume 4/4. The current estimator only evaluates 3/4 versus 4/4 and does not yet estimate 6/8, pickup bars, tempo changes, or full subdivision-level chord onsets. Chord events are inferred from chroma frames aggregated into beat-aligned groups whenever beat tracking is available; fixed windows remain the fallback. This reduces arbitrary time-based cuts, but still cannot detect chord changes inside one frame or infer subdivisions, pickups, or tempo changes. `refinementSuggestions` remains a non-destructive review aid: by default it flags an event up to 0.55 seconds long between matching neighboring chords, but does not change or remove the event. A different user edit is never overwritten. Chord confidence and meter confidence are heuristic scores, not calibrated probabilities.
 
 ## Frontend integration status
@@ -105,7 +107,7 @@ The response includes `chordSheet` schema version `1.2`, a conservative timeline
 ## Known limitations
 
 1. **Chord identification remains heuristic.** A candidate with a bass-root match can still be bypassed by the progression optimizer when its estimated voicing-transition cost is higher. Treat results as ranked hypotheses, not guaranteed transcription. Weight changes should be supported by a multi-example regression set rather than one WAV.
-2. **No harmonic-function or key-analysis endpoint yet.** The progression optimizer ranks playable voicing paths but does not label Roman numerals or infer a key.
+2. **Key estimation is heuristic.** Relative major/minor alternatives are surfaced when the chroma evidence does not establish a clear tonal center; very short, sparse or ambiguous passages may remain uncertain. Roman-numeral / harmonic-function analysis is not included yet.
 3. **Finger/barre assignment is not included.** `Voicing` carries note/fret information, but no left-hand finger or barre assignment.
 4. **Worker error detail is coarse.** `POST /api/audio-analysis` maps worker failures other than invalid input or too-large uploads to 502 `internal_error`, so the UI cannot distinguish a stopped worker from a failed analysis.
 5. **Sparse voicing ranking still depends on constraints.** Restrict `minNotes`, fret span, and muted/open strings to match the player's intent; ranking scores are heuristic rather than a guarantee of playability.

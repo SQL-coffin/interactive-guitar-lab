@@ -279,6 +279,35 @@ export function AudioAnalysis() {
             </p>
           </Panel>
 
+          {result.keyAnalysis ? (
+            <Panel
+              title="Estimated key"
+              titleId="key-analysis-title"
+              description={result.keyAnalysis.status === "ambiguous"
+                ? "Several tonal centers remain plausible."
+                : "A best-effort estimate of the recording's tonal center."}
+            >
+              {result.keyAnalysis.status === "insufficient-evidence" ? (
+                <p className={styles.caveat} role="note">{result.keyAnalysis.explanation}</p>
+              ) : (
+                <>
+                  <ul className={styles.keyCandidates} aria-label="Possible keys">
+                    {result.keyAnalysis.candidates.map((candidate) => (
+                      <li
+                        className={styles.keyCandidate}
+                        data-ambiguous={result.keyAnalysis?.status === "ambiguous" ? "true" : "false"}
+                        key={candidate.label}
+                      >
+                        <span className={styles.keyName}>{candidate.label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className={styles.caveat} role="note">{result.keyAnalysis.explanation}</p>
+                </>
+              )}
+            </Panel>
+          ) : null}
+
           <div className={styles.viewSwitch}>
             <SegmentedControl label="Analysis view" hideLabel value={view} options={VIEWS} onChange={setView} />
           </div>

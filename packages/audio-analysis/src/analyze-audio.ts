@@ -1,6 +1,7 @@
 import { analyzeChromaProgression, type ChromaProgressionAnalysisOptions, type ChromaProgressionAnalysisResult } from "./recommend-voicings.js";
 import { buildChordSheet, type ChordSheetResult } from "./chord-sheet.js";
 import { extractAudioFeatures, type AudioFeatureResponse, type AudioWorkerClientOptions } from "./worker-client.js";
+import { analyzeKeyCandidates, type KeyAnalysisResult } from "./key-analysis.js";
 
 export interface AnalyzeAudioForChordsOptions extends AudioWorkerClientOptions {
   chordAnalysis?: ChromaProgressionAnalysisOptions;
@@ -11,6 +12,8 @@ export interface AnalyzeAudioForChordsResult {
   chordAnalysis: ChromaProgressionAnalysisResult;
   /** Conservative, editable chord-event timeline derived from the raw frame hypotheses. */
   chordSheet: ChordSheetResult;
+  /** Optional so previously saved analysis sessions without this field remain readable. */
+  keyAnalysis?: KeyAnalysisResult;
 }
 
 /**
@@ -23,6 +26,7 @@ export async function analyzeAudioForChords(
 ): Promise<AnalyzeAudioForChordsResult> {
   const features = await extractAudioFeatures(audio, options);
   const chordAnalysis = analyzeChromaProgression(features.frames, options.chordAnalysis);
+  const keyAnalysis = analyzeKeyCandidates(features.frames);
   const meterKnown = features.rhythm.timeSignatureNumerator != null
     && features.rhythm.timeSignatureDenominator === 4;
   const chordSheet = buildChordSheet(chordAnalysis.frameResults, {
@@ -37,5 +41,5 @@ export async function analyzeAudioForChords(
     downbeatTimesSeconds: features.rhythm.downbeatTimesSeconds ?? [],
   });
   const { frames: _frames, ...metadata } = features;
-  return { audio: metadata, chordAnalysis, chordSheet };
+  return { audio: metadata, chordAnalysis, chordSheet, keyAnalysis };
 }
