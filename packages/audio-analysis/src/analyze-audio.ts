@@ -2,9 +2,11 @@ import { analyzeChromaProgression, type ChromaProgressionAnalysisOptions, type C
 import { buildChordSheet, type ChordSheetResult } from "./chord-sheet.js";
 import { extractAudioFeatures, type AudioFeatureResponse, type AudioWorkerClientOptions } from "./worker-client.js";
 import { analyzeKeyCandidates, type KeyAnalysisResult } from "./key-analysis.js";
+import { detectKeyChanges, type KeyChangeDetectionResult, type KeyChangeDetectionOptions } from "./key-change-detection.js";
 
 export interface AnalyzeAudioForChordsOptions extends AudioWorkerClientOptions {
   chordAnalysis?: ChromaProgressionAnalysisOptions;
+  keyChangeDetection?: KeyChangeDetectionOptions;
 }
 
 export interface AnalyzeAudioForChordsResult {
@@ -14,6 +16,8 @@ export interface AnalyzeAudioForChordsResult {
   chordSheet: ChordSheetResult;
   /** Optional so previously saved analysis sessions without this field remain readable. */
   keyAnalysis?: KeyAnalysisResult;
+  /** Independent, conservative local-key change analysis; does not replace the song-level key estimate. */
+  keyChangeDetection?: KeyChangeDetectionResult;
 }
 
 /**
@@ -27,6 +31,7 @@ export async function analyzeAudioForChords(
   const features = await extractAudioFeatures(audio, options);
   const chordAnalysis = analyzeChromaProgression(features.frames, options.chordAnalysis);
   const keyAnalysis = analyzeKeyCandidates(features.frames);
+  const keyChangeDetection = detectKeyChanges(features.frames, options.keyChangeDetection, chordAnalysis.frameResults);
   const meterKnown = features.rhythm.timeSignatureNumerator != null
     && features.rhythm.timeSignatureDenominator === 4;
   const chordSheet = buildChordSheet(chordAnalysis.frameResults, {
@@ -41,5 +46,5 @@ export async function analyzeAudioForChords(
     downbeatTimesSeconds: features.rhythm.downbeatTimesSeconds ?? [],
   });
   const { frames: _frames, ...metadata } = features;
-  return { audio: metadata, chordAnalysis, chordSheet, keyAnalysis };
+  return { audio: metadata, chordAnalysis, chordSheet, keyAnalysis, keyChangeDetection };
 }

@@ -10,6 +10,9 @@ import type {
   ChordInferenceResult,
   ChromaProgressionAnalysisOptions,
   ChromaProgressionAnalysisResult,
+  KeyChangeDetectionResult,
+  KeyChangeEvent,
+  MusicalKeyCandidate,
 } from "@interactive-guitar-lab/audio-analysis";
 import type {
   OptimizedVoicingProgression,
@@ -35,6 +38,9 @@ export type {
   ChordInferenceResult,
   ChromaProgressionAnalysisOptions,
   ChromaProgressionAnalysisResult,
+  KeyChangeDetectionResult,
+  KeyChangeEvent,
+  MusicalKeyCandidate,
   OptimizedVoicingProgression,
   OptimizedVoicingStep,
   ProgressionCandidateInput,

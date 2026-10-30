@@ -66,6 +66,19 @@ export function isProgressionOptimizationResponse(value: unknown): value is Prog
 }
 
 
+const isPitchClass = (value: unknown): boolean => Number.isInteger(value) && Number(value) >= 0 && Number(value) < 12;
+const isPitchClassList = (value: unknown): boolean => Array.isArray(value) && value.every(isPitchClass);
+const isStringList = (value: unknown): boolean => Array.isArray(value) && value.every((item) => typeof item === "string");
+
+function isKeyCandidate(candidate: unknown): boolean {
+  return isRecord(candidate)
+    && typeof candidate.tonic === "string"
+    && isPitchClass(candidate.tonicPitchClass)
+    && (candidate.mode === "major" || candidate.mode === "minor")
+    && typeof candidate.label === "string"
+    && isNumber(candidate.score);
+}
+
 function isKeyAnalysisResult(value: unknown): boolean {
   if (!isRecord(value)
       || !["identified", "ambiguous", "insufficient-evidence"].includes(String(value.status))
@@ -81,22 +94,65 @@ function isKeyAnalysisResult(value: unknown): boolean {
       || !value.evidence.observedPitchClasses.every((pitchClass) => Number.isInteger(pitchClass) && pitchClass >= 0 && pitchClass < 12)) {
     return false;
   }
-  return value.candidates.every((candidate) =>
-    isRecord(candidate)
-    && typeof candidate.tonic === "string"
-    && Number.isInteger(candidate.tonicPitchClass)
-    && Number(candidate.tonicPitchClass) >= 0
-    && Number(candidate.tonicPitchClass) < 12
-    && (candidate.mode === "major" || candidate.mode === "minor")
-    && typeof candidate.label === "string"
-    && isNumber(candidate.score),
-  );
+  return value.candidates.every(isKeyCandidate);
+}
+
+/*
+ * keyChangeDetection is optional: sessions saved before it existed omit it. When present it
+ * must be well formed, because the Key changes panel renders every event field it carries.
+ */
+function isKeyChangeEvent(value: unknown): boolean {
+  if (!isRecord(value)
+      || !isNumber(value.timeSeconds)
+      || !isRecord(value.transitionWindow)
+      || !isNumber(value.transitionWindow.startSeconds)
+      || !isNumber(value.transitionWindow.endSeconds)
+      || !Array.isArray(value.beforeCandidates) || !value.beforeCandidates.every(isKeyCandidate)
+      || !Array.isArray(value.afterCandidates) || !value.afterCandidates.every(isKeyCandidate)
+      || !["possible", "uncertain"].includes(String(value.status))
+      || !["possible-modulation", "local-tonicization-or-modulation", "uncertain"].includes(String(value.interpretation))
+      || !["low", "moderate", "high"].includes(String(value.confidence))
+      || !isNumber(value.confidenceScore)
+      || typeof value.explanation !== "string"
+      || !isRecord(value.evidence)) {
+    return false;
+  }
+  const evidence = value.evidence;
+  return isNumber(evidence.beforeWindowCount)
+    && isNumber(evidence.afterWindowCount)
+    && isNumber(evidence.persistentAfterSeconds)
+    && isPitchClassList(evidence.observedPitchClassesBefore)
+    && isPitchClassList(evidence.observedPitchClassesAfter)
+    && (evidence.bassSupportBefore === null || isPitchClass(evidence.bassSupportBefore))
+    && (evidence.bassSupportAfter === null || isPitchClass(evidence.bassSupportAfter))
+    && isStringList(evidence.topChordsBefore)
+    && isStringList(evidence.topChordsAfter);
+}
+
+function isKeyChangeWindow(value: unknown): boolean {
+  return isRecord(value)
+    && isNumber(value.startSeconds)
+    && isNumber(value.endSeconds)
+    && Array.isArray(value.candidates) && value.candidates.every(isKeyCandidate)
+    && (value.leadingCandidate === null || isKeyCandidate(value.leadingCandidate))
+    && (value.scoreMargin === null || isNumber(value.scoreMargin));
+}
+
+function isKeyChangeDetectionResult(value: unknown): boolean {
+  return isRecord(value)
+    && ["detected", "no-clear-change", "insufficient-evidence"].includes(String(value.status))
+    && isNumber(value.windowSeconds)
+    && isNumber(value.hopSeconds)
+    && typeof value.explanation === "string"
+    && Array.isArray(value.windows) && value.windows.every(isKeyChangeWindow)
+    && Array.isArray(value.events) && value.events.every(isKeyChangeEvent);
 }
 
 export function isAudioAnalysisResponse(value: unknown): value is AudioAnalysisResponse {
   if (!isRecord(value) || !isRecord(value.audio) || !isRecord(value.chordAnalysis)) return false;
   const { audio, chordAnalysis } = value;
   return (value.keyAnalysis === undefined || isKeyAnalysisResult(value.keyAnalysis))
+    && (value.keyChangeDetection === undefined || isKeyChangeDetectionResult(value.keyChangeDetection))
     && isNumber(audio.durationSeconds)
     && isNumber(audio.windowSeconds)
     && isRecord(audio.rhythm)

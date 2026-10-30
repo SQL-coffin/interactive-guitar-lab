@@ -6,6 +6,7 @@ import { createLocalGuitarLabService, ServiceError, type AudioAnalysisResponse, 
 import { GuitarLabServiceProvider } from "@/state/ServiceContext";
 import { LabSessionProvider } from "@/state/lab/LabSessionProvider";
 import { createMemoryRepository } from "@/state/lab/repository";
+import { keyChangeDetection, keyChangeEvent } from "@/test/keyChangeFixture";
 import { AudioAnalysis } from "./AudioAnalysis";
 
 // Fixture produced by the backend's own analysis pipeline from synthetic chroma, so its
@@ -140,6 +141,51 @@ describe("AudioAnalysis", () => {
     expect(screen.getByText("C major")).toBeInTheDocument();
     expect(screen.getByText("A minor")).toBeInTheDocument();
     expect(screen.getByText(/does not establish one tonal center clearly enough/i)).toBeInTheDocument();
+  });
+
+  it("shows key changes beside the estimated key and seeks the timeline and player to an event", async () => {
+    const withChanges: AudioAnalysisResponse = {
+      ...fixture,
+      keyAnalysis: {
+        status: "identified",
+        candidates: [{ tonic: "C", tonicPitchClass: 0, mode: "major", label: "C major", score: 0.8 }],
+        ambiguityKind: null,
+        scoreMargin: 0.1,
+        evidence: { activeDurationSeconds: 3, observedPitchClasses: [0, 2, 4, 7, 11] },
+        explanation: "One key fits best.",
+      },
+      keyChangeDetection: keyChangeDetection({ events: [keyChangeEvent({ timeSeconds: 3.4 })] }),
+    };
+    renderAudio(vi.fn<GuitarLabService["analyzeAudio"]>().mockResolvedValue(withChanges));
+    const user = userEvent.setup();
+    await user.upload(screen.getByLabelText(/Choose audio file/), wav());
+    await user.click(screen.getByRole("button", { name: "Analyze recording" }));
+
+    // The song-level estimate stays; key changes are a separate panel.
+    expect(await screen.findByRole("region", { name: "Estimated key" })).toHaveTextContent("C major");
+    const panel = screen.getByRole("region", { name: /Key changes/ });
+    // Start from the Score view: selecting an event must bring back the timeline and player.
+    await user.click(screen.getByRole("radio", { name: "Score · 简谱" }));
+    expect(screen.queryByRole("region", { name: "Timeline" })).not.toBeInTheDocument();
+
+    await user.click(within(panel).getByRole("button", { name: /Change 1 at 0:03.4/ }));
+    expect(screen.getByRole("region", { name: "Timeline" })).toBeInTheDocument();
+    const lane = screen.getByRole("toolbar", { name: "Top hypothesis per window" });
+    expect(within(lane).getAllByRole("button")[3]).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("region", { name: /Window 4/ })).toBeInTheDocument();
+    expect(document.querySelector("audio")!.currentTime).toBeCloseTo(3.4);
+  });
+
+  it("opens results without key-change data, as in sessions saved before the field existed", async () => {
+    expect(fixture.keyChangeDetection).toBeUndefined();
+    renderAudio(vi.fn<GuitarLabService["analyzeAudio"]>().mockResolvedValue(fixture));
+    const user = userEvent.setup();
+    await user.upload(screen.getByLabelText(/Choose audio file/), wav());
+    await user.click(screen.getByRole("button", { name: "Analyze recording" }));
+
+    const panel = await screen.findByRole("region", { name: /Key changes/ });
+    expect(panel).toHaveTextContent(/predates key-change detection/);
+    expect(screen.getByRole("region", { name: "Timeline" })).toBeInTheDocument();
   });
 
   it("explains a worker outage and retries", async () => {
