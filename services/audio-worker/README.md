@@ -14,6 +14,16 @@ python -m unittest -v   # runs test_app.py (chroma) and test_note_events.py (not
 uvicorn app:app --host 127.0.0.1 --port 8010
 ```
 
+## CI and contract fixtures
+
+`.github/workflows/ci.yml` runs on pull requests to `main`:
+
+- **`audio-worker`**: installs `requirements.txt` pinned by `constraints.txt` on Python 3.13, then runs `python -m pytest`, which covers `test_app.py`, `test_note_events.py` and `test_contract_fixtures.py`. It also writes fresh contract fixtures with `python contract_fixtures.py <dir>`.
+- **`contract`**: feeds those freshly generated worker responses through the TypeScript runtime validators (`packages/audio-analysis/src/worker-contract.test.ts`).
+- **`typescript`**: `npm ci`, `npm test`, `npm run typecheck`, `npm run build:web`.
+
+`contracts/audio-worker/*.json` are committed copies of real worker responses for deterministic synthetic WAVs. `test_contract_fixtures.py` fails if they drift from current output. After an intentional contract change, regenerate them with `python contract_fixtures.py`. After changing `requirements.txt`, regenerate `constraints.txt` from a verified install with `pip freeze`. CI uses no network services, model downloads or secrets.
+
 ## Endpoints
 
 - `GET /health`

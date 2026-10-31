@@ -1,0 +1,135 @@
+{
+  "durationSeconds": 3.0,
+  "filename": "overlapping-open-ended.wav",
+  "frames": [
+    {
+      "bassPitchClass": 5,
+      "chroma": [
+        0.264088,
+        0.224205,
+        0.196868,
+        0.17153,
+        0.154734,
+        0.152283,
+        0.18078,
+        0.276169,
+        0.594574,
+        1.0,
+        0.653673,
+        0.356771
+      ],
+      "endSeconds": 0.209,
+      "startSeconds": 0.0
+    },
+    {
+      "bassPitchClass": 9,
+      "chroma": [
+        0.00028,
+        0.000372,
+        0.001081,
+        0.015631,
+        0.060936,
+        0.014241,
+        0.001166,
+        0.00262,
+        0.225008,
+        1.0,
+        0.193411,
+        0.002006
+      ],
+      "endSeconds": 0.9288,
+      "startSeconds": 0.209
+    },
+    {
+      "bassPitchClass": 9,
+      "chroma": [
+        0.000307,
+        0.000196,
+        0.001077,
+        0.178792,
+        1.0,
+        0.154195,
+        0.001004,
+        0.00222,
+        0.160093,
+        0.703987,
+        0.137619,
+        0.001846
+      ],
+      "endSeconds": 1.8344,
+      "startSeconds": 0.9288
+    },
+    {
+      "bassPitchClass": null,
+      "chroma": [
+        0.000146,
+        0.000226,
+        0.001462,
+        0.181087,
+        1.0,
+        0.156482,
+        0.00122,
+        0.000261,
+        0.000193,
+        0.000172,
+        0.000148,
+        0.00013
+      ],
+      "endSeconds": 3.0,
+      "startSeconds": 1.8344
+    }
+  ],
+  "noteEvents": {
+    "events": [
+      {
+        "offsetConfidence": 0.9996,
+        "offsetSeconds": 1.8001,
+        "onsetConfidence": 0.9679,
+        "onsetSeconds": 0.2033,
+        "pitchConfidence": 0.9949,
+        "pitchMidi": 57,
+        "source": "heuristic"
+      },
+      {
+        "offsetConfidence": null,
+        "offsetSeconds": null,
+        "onsetConfidence": 0.9995,
+        "onsetSeconds": 0.9003,
+        "pitchConfidence": 0.9979,
+        "pitchMidi": 64,
+        "source": "heuristic"
+      }
+    ],
+    "frameRateHz": 86.1328,
+    "model": {
+      "calibrated": false,
+      "name": "heuristic-cqt-onset-baseline",
+      "source": "heuristic",
+      "version": "0.1.0"
+    },
+    "pitchRangeMidi": {
+      "max": 88,
+      "min": 40
+    },
+    "schemaVersion": "1.0",
+    "truncated": false
+  },
+  "rhythm": {
+    "barDurationSeconds": null,
+    "beatTimesSeconds": [
+      0.209,
+      0.9288,
+      1.8344
+    ],
+    "downbeatTimesSeconds": [],
+    "meterConfidence": null,
+    "tempoBpm": 66.26,
+    "timeSignatureDenominator": null,
+    "timeSignatureNumerator": null
+  },
+  "sampleRate": 22050,
+  "schemaVersion": "1.0",
+  "windowSeconds": 0.5,
+  "windowStrategy": "manual",
+  "windowingMode": "beat-aligned"
+}

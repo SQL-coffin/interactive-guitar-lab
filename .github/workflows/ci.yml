@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Read-only token; no secrets are used by any job.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  audio-worker:
+    name: Python audio worker tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: services/audio-worker
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            services/audio-worker/requirements.txt
+            services/audio-worker/constraints.txt
+
+      - name: Install pinned dependencies
+        run: python -m pip install -r requirements.txt -c constraints.txt
+
+      # test_app.py (chroma, decoding, error handling), test_note_events.py (note-event layer,
+      # HTTP validation, limits) and test_contract_fixtures.py (API compatibility + fixture drift).
+      - name: Run worker tests
+        run: python -m pytest -v
+
+      - name: Generate contract fixtures from the current worker
+        run: python contract_fixtures.py "$RUNNER_TEMP/worker-contract"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: worker-contract-fixtures
+          path: ${{ runner.temp }}/worker-contract
+          if-no-files-found: error
+          retention-days: 7
+
+  typescript:
+    name: TypeScript tests, typecheck and web build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies from lockfile
+        run: npm ci
+
+      # All Vitest projects: packages/** (music-theory, audio-analysis incl. note events and the
+      # contract test against committed fixtures) and apps/web (API routes, components).
+      - name: Run tests
+        run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Workspace packages have no separate build step (they export TypeScript sources);
+      # the Next.js production build compiles them as part of the web app.
+      - name: Build web app
+        run: npm run build:web
+
+  contract:
+    name: Python → TypeScript contract
+    needs: audio-worker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies from lockfile
+        run: npm ci
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: worker-contract-fixtures
+          path: ${{ runner.temp }}/worker-contract
+
+      - name: Validate freshly generated worker responses with the TypeScript runtime validators
+        env:
+          WORKER_CONTRACT_FIXTURES_DIR: ${{ runner.temp }}/worker-contract
+        run: npx vitest run --project music-theory packages/audio-analysis/src/worker-contract.test.ts

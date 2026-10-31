@@ -1,0 +1,112 @@
+{
+  "durationSeconds": 2.0,
+  "filename": "silence.wav",
+  "frames": [
+    {
+      "bassPitchClass": null,
+      "chroma": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "endSeconds": 0.5,
+      "startSeconds": 0.0
+    },
+    {
+      "bassPitchClass": null,
+      "chroma": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "endSeconds": 1.0,
+      "startSeconds": 0.5
+    },
+    {
+      "bassPitchClass": null,
+      "chroma": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "endSeconds": 1.5,
+      "startSeconds": 1.0
+    },
+    {
+      "bassPitchClass": null,
+      "chroma": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "endSeconds": 2.0,
+      "startSeconds": 1.5
+    }
+  ],
+  "noteEvents": {
+    "events": [],
+    "frameRateHz": 86.1328,
+    "model": {
+      "calibrated": false,
+      "name": "heuristic-cqt-onset-baseline",
+      "source": "heuristic",
+      "version": "0.1.0"
+    },
+    "pitchRangeMidi": {
+      "max": 88,
+      "min": 40
+    },
+    "schemaVersion": "1.0",
+    "truncated": false
+  },
+  "rhythm": {
+    "barDurationSeconds": null,
+    "beatTimesSeconds": [],
+    "downbeatTimesSeconds": [],
+    "meterConfidence": null,
+    "tempoBpm": null,
+    "timeSignatureDenominator": null,
+    "timeSignatureNumerator": null
+  },
+  "sampleRate": 22050,
+  "schemaVersion": "1.0",
+  "windowSeconds": 0.5,
+  "windowStrategy": "manual",
+  "windowingMode": "fixed-window"
+}
