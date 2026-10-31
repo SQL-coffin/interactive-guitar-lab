@@ -1,0 +1,32 @@
+{
+  "durationSeconds": 3.0,
+  "filename": "single-tone.wav",
+  "noteEvents": {
+    "events": [
+      {
+        "offsetConfidence": 0.9996,
+        "offsetSeconds": 2.0006,
+        "onsetConfidence": 0.9841,
+        "onsetSeconds": 0.5024,
+        "pitchConfidence": 0.9954,
+        "pitchMidi": 69,
+        "source": "heuristic"
+      }
+    ],
+    "frameRateHz": 86.1328,
+    "model": {
+      "calibrated": false,
+      "name": "heuristic-cqt-onset-baseline",
+      "source": "heuristic",
+      "version": "0.1.0"
+    },
+    "pitchRangeMidi": {
+      "max": 88,
+      "min": 40
+    },
+    "schemaVersion": "1.0",
+    "truncated": false
+  },
+  "sampleRate": 22050,
+  "schemaVersion": "1.0"
+}

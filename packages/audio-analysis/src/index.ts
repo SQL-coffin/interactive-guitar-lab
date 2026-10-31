@@ -8,7 +8,26 @@ export { analyzeKeyCandidates } from "./key-analysis.js";
 export { detectKeyChanges } from "./key-change-detection.js";
 export type { KeyChangeConfidence, KeyChangeDetectionOptions, KeyChangeDetectionResult, KeyChangeEvent, KeyChangeInterpretation, KeyChangeStatus, KeyChangeWindow } from "./key-change-detection.js";
 export type { KeyAnalysisOptions, KeyAnalysisResult, KeyAnalysisStatus, KeyAmbiguityKind, MusicalKeyCandidate, MusicalKeyMode } from "./key-analysis.js";
-export { AudioWorkerError, extractAudioFeatures } from "./worker-client.js";
+export { AudioWorkerError, extractAudioFeatures, extractNoteEvents } from "./worker-client.js";
+export {
+  GUITAR_TECHNIQUES,
+  MAX_NOTE_EVENTS,
+  NoteEventValidationError,
+  parseNoteEvent,
+  parseNoteEventAnalysis,
+  sortNoteEvents,
+  validateNoteEvents,
+} from "./note-events.js";
+export type {
+  GuitarNoteAttributes,
+  GuitarTechnique,
+  NoteEvent,
+  NoteEventAnalysis,
+  NoteEventModelInfo,
+  NoteEventSource,
+} from "./note-events.js";
+export { analyzeAudioNoteEvents, summarizeNoteEvents } from "./analyze-note-events.js";
+export type { AnalyzeAudioNoteEventsResult, NoteEventSummary } from "./analyze-note-events.js";
 export {
   AUDIO_ANALYSIS_LIMITS,
   AudioAnalysisBudgetError,
@@ -29,6 +48,8 @@ export type {
 export type {
   AudioFeatureResponse,
   AudioWorkerClientOptions,
+  NoteEventFeatureResponse,
+  NoteEventWorkerClientOptions,
 } from "./worker-client.js";
 export type {
   AnalyzeAudioForChordsOptions,

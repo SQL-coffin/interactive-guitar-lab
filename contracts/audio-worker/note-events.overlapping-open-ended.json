@@ -1,0 +1,41 @@
+{
+  "durationSeconds": 3.0,
+  "filename": "overlapping-open-ended.wav",
+  "noteEvents": {
+    "events": [
+      {
+        "offsetConfidence": 0.9996,
+        "offsetSeconds": 1.8001,
+        "onsetConfidence": 0.9679,
+        "onsetSeconds": 0.2033,
+        "pitchConfidence": 0.9949,
+        "pitchMidi": 57,
+        "source": "heuristic"
+      },
+      {
+        "offsetConfidence": null,
+        "offsetSeconds": null,
+        "onsetConfidence": 0.9995,
+        "onsetSeconds": 0.9003,
+        "pitchConfidence": 0.9979,
+        "pitchMidi": 64,
+        "source": "heuristic"
+      }
+    ],
+    "frameRateHz": 86.1328,
+    "model": {
+      "calibrated": false,
+      "name": "heuristic-cqt-onset-baseline",
+      "source": "heuristic",
+      "version": "0.1.0"
+    },
+    "pitchRangeMidi": {
+      "max": 88,
+      "min": 40
+    },
+    "schemaVersion": "1.0",
+    "truncated": false
+  },
+  "sampleRate": 22050,
+  "schemaVersion": "1.0"
+}

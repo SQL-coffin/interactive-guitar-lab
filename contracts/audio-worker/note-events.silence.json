@@ -1,0 +1,22 @@
+{
+  "durationSeconds": 2.0,
+  "filename": "silence.wav",
+  "noteEvents": {
+    "events": [],
+    "frameRateHz": 86.1328,
+    "model": {
+      "calibrated": false,
+      "name": "heuristic-cqt-onset-baseline",
+      "source": "heuristic",
+      "version": "0.1.0"
+    },
+    "pitchRangeMidi": {
+      "max": 88,
+      "min": 40
+    },
+    "schemaVersion": "1.0",
+    "truncated": false
+  },
+  "sampleRate": 22050,
+  "schemaVersion": "1.0"
+}

@@ -32,7 +32,7 @@ All payload types are the engine's exported types (`BuiltChord`, `VoicingSearchO
 | POST | `/api/voicings/search` | `{ root, quality, options? }` | `VoicingSearchResult` |
 | GET | `/api/fretboard?maxFret=15&tuning=40,45,50,55,59,64` | Query: `maxFret`, optional `tuning` (comma-separated MIDI) | `{ tuning, maxFret, positions }` |
 | POST | `/api/progressions/optimize` | `{ layers: ProgressionCandidateInput[][], options? }` | `ProgressionOptimizationResult` |
-| POST | /api/audio-analysis | multipart/form-data: required file; optional windowSeconds (0.1–2.0), windowStrategy (manual/auto), options JSON | { audio, chordAnalysis, chordSheet, keyAnalysis? } |
+| POST | /api/audio-analysis | multipart/form-data: required file; optional windowSeconds (0.1–2.0), windowStrategy (manual/auto), includeNoteEvents (true/false), options JSON | { audio, chordAnalysis, chordSheet, keyAnalysis?, keyChangeDetection?, noteEvents? } |
 
 ### Progression optimization
 
@@ -96,6 +96,46 @@ Key analysis is included as `keyAnalysis` when available. It compares the durati
 
 The response includes `chordSheet` schema version `1.2`, a conservative timeline derived from `chordAnalysis.frameResults`. Consecutive windows are merged only when their top-ranked chord symbols match and their timestamps are contiguous. Each event contains `chordSymbol`, `root`, `quality`, start/end times, mean confidence/score, `sourceFrameIndexes`, and best-effort beat/bar positions. Silent windows are listed in `skippedWindowIndexes` and break continuity. The rhythm object includes detected beats, estimated downbeats, `timeSignatureNumerator` / `timeSignatureDenominator`, `beatsPerBar`, and `meterConfidence`. On the audio-analysis path, `beatsPerBar` and bar positions stay null when meter is unknown; we do not silently assume 4/4. The current estimator only evaluates 3/4 versus 4/4 and does not yet estimate 6/8, pickup bars, tempo changes, or full subdivision-level chord onsets. Chord events are inferred from chroma frames aggregated into beat-aligned groups whenever beat tracking is available; fixed windows remain the fallback. This reduces arbitrary time-based cuts, but still cannot detect chord changes inside one frame or infer subdivisions, pickups, or tempo changes. `refinementSuggestions` remains a non-destructive review aid: by default it flags an event up to 0.55 seconds long between matching neighboring chords, but does not change or remove the event. A different user edit is never overwritten. Chord confidence and meter confidence are heuristic scores, not calibrated probabilities.
 
+### Note events (opt-in, heuristic)
+
+Send the form field `includeNoteEvents=true` to add a `noteEvents` object to the response. Omitting
+it (or sending `false`) leaves the request to the worker and the response exactly as before; any
+other value is a 400 `invalid_request`. The same upload and the same decoded audio serve both the
+chroma frames and the note events, and the existing 25 MiB / 600-second limits, cancellation and
+timeout apply unchanged. The frontend does not consume this field yet, and saved analysis sessions
+without it remain valid.
+
+```ts
+interface NoteEventAnalysis {
+  schemaVersion: "1.0";
+  model: { name: string; version: string; source: "heuristic" | "model"; calibrated: boolean };
+  frameRateHz: number;                       // timing resolution of the producing model
+  pitchRangeMidi: { min: number; max: number }; // baseline: 40 (E2) to 88 (E6)
+  truncated: boolean;                        // true if the 10,000-event cap was hit
+  events: NoteEvent[];                       // sorted by onsetSeconds, then pitchMidi
+}
+
+interface NoteEvent {
+  pitchMidi: number;                 // integer 0-127
+  onsetSeconds: number;              // absolute seconds from the start of the audio
+  offsetSeconds: number | null;      // null = not enough evidence to place the end
+  onsetConfidence: number;           // 0-1 heuristic score
+  offsetConfidence: number | null;   // null exactly when offsetSeconds is null
+  pitchConfidence: number;           // 0-1 heuristic score
+  source: "heuristic" | "model";
+  guitar?: {                         // reserved; the baseline never sets it
+    stringNumber?: number; fret?: number; strumGroupId?: number;
+    techniques?: Array<"slide-in" | "slide-out" | "bend" | "release" | "hammer-on" | "pull-off" | "vibrato" | "palm-mute" | "harmonic">;
+  };
+}
+```
+
+Rules consumers can rely on: events are sorted; overlapping notes are kept (a chord yields several
+events with near-identical onsets); timestamps are finite and inside the audio; confidences are
+heuristic ranking scores, **not** calibrated probabilities, while `model.calibrated` is false. There is
+no MIDI velocity: spectral level is not a measurement of picking intensity. The baseline is *not*
+a guitar transcription model; see `services/audio-worker/README.md` for what it can and cannot detect.
+
 ## Frontend integration status
 
 | Workspace | Endpoint(s) | Status |
@@ -112,3 +152,4 @@ The response includes `chordSheet` schema version `1.2`, a conservative timeline
 4. **Worker error detail is coarse.** `POST /api/audio-analysis` maps worker failures other than invalid input or too-large uploads to 502 `internal_error`, so the UI cannot distinguish a stopped worker from a failed analysis.
 5. **Sparse voicing ranking still depends on constraints.** Restrict `minNotes`, fret span, and muted/open strings to match the player's intent; ranking scores are heuristic rather than a guarantee of playability.
 6. **Structured validation errors are not yet exposed.** Responses have a code and message but no field path for form highlighting.
+7. **Note events are heuristic candidates, not transcription.** The opt-in `noteEvents` baseline misses legato notes (slides, hammer-ons, pull-offs, bends), confuses octaves/overtones, drops notes in dense chords or a semitone apart, and has coarse timing for low notes. It is not shown in the UI and has not been evaluated on real guitar recordings.

@@ -1,0 +1,80 @@
+{
+  "durationSeconds": 3.0,
+  "filename": "single-tone.wav",
+  "frames": [
+    {
+      "bassPitchClass": 9,
+      "chroma": [
+        0.075296,
+        0.029191,
+        0.009795,
+        0.008142,
+        0.016564,
+        0.035812,
+        0.070376,
+        0.133054,
+        0.401747,
+        1.0,
+        0.403412,
+        0.150905
+      ],
+      "endSeconds": 0.5341,
+      "startSeconds": 0.0
+    },
+    {
+      "bassPitchClass": null,
+      "chroma": [
+        0.000126,
+        7.7e-05,
+        6e-05,
+        5.8e-05,
+        6.6e-05,
+        8.9e-05,
+        0.000149,
+        0.001004,
+        0.166435,
+        1.0,
+        0.142165,
+        0.000783
+      ],
+      "endSeconds": 2.0201,
+      "startSeconds": 0.5341
+    },
+    {
+      "bassPitchClass": null,
+      "chroma": [
+        0.28049,
+        0.26987,
+        0.263149,
+        0.256582,
+        0.251709,
+        0.250007,
+        0.257981,
+        0.303681,
+        0.567767,
+        1.0,
+        0.556284,
+        0.315983
+      ],
+      "endSeconds": 3.0,
+      "startSeconds": 2.0201
+    }
+  ],
+  "rhythm": {
+    "barDurationSeconds": null,
+    "beatTimesSeconds": [
+      0.5341,
+      2.0201
+    ],
+    "downbeatTimesSeconds": [],
+    "meterConfidence": null,
+    "tempoBpm": 40.37,
+    "timeSignatureDenominator": null,
+    "timeSignatureNumerator": null
+  },
+  "sampleRate": 22050,
+  "schemaVersion": "1.0",
+  "windowSeconds": 0.5,
+  "windowStrategy": "manual",
+  "windowingMode": "beat-aligned"
+}
