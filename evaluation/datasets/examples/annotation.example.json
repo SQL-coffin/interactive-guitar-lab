@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0",
+  "recordingId": "clean-di-arpeggio-01",
+  "completeness": "partial",
+  "annotatedRegions": [[0.0, 8.0]],
+  "notes": [
+    { "pitchMidi": 48, "onsetSeconds": 0.512, "offsetSeconds": 2.31, "stringNumber": 2, "fret": 3 },
+    { "pitchMidi": 52, "onsetSeconds": 0.987, "offsetSeconds": null, "stringNumber": 3, "fret": 2 },
+    { "pitchMidi": 55, "onsetSeconds": 1.468, "offsetSeconds": 2.9, "stringNumber": 4, "fret": 0 },
+    { "pitchMidi": 57, "onsetSeconds": 1.95, "offsetSeconds": 2.6, "stringNumber": 4, "fret": 2, "technique": "hammer-on" },
+    { "pitchMidi": 60, "onsetSeconds": 3.402, "offsetSeconds": 4.1, "stringNumber": 5, "fret": 1, "annotationConfidence": 0.4 }
+  ]
+}
