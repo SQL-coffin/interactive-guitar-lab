@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.0",
+  "datasetId": "my-guitar-recordings",
+  "version": "0.1.0",
+  "description": "Example manifest for locally recorded, manually annotated electric guitar takes.",
+  "license": "Private - not for redistribution",
+  "splits": {
+    "test": ["clean-di-arpeggio-01"]
+  },
+  "recordings": [
+    {
+      "id": "clean-di-arpeggio-01",
+      "audio": { "path": "audio/clean-di-arpeggio-01.wav", "sha256": "<sha256 of the audio file>" },
+      "annotation": { "path": "annotations/clean-di-arpeggio-01.json", "sha256": "<sha256 of the annotation file>" },
+      "scenarios": ["arpeggios", "natural-decay"],
+      "metadata": {
+        "source": "real",
+        "sampleRateHz": 48000,
+        "durationSeconds": 12.5,
+        "instrument": "electric-guitar",
+        "tuning": { "name": "standard", "stringsMidi": [40, 45, 50, 55, 59, 64] },
+        "recordingMethod": "di",
+        "conditions": { "environment": "home studio", "noise": "low", "effects": [], "notes": "Neck pickup, no amp." },
+        "annotationSource": { "method": "manual", "annotator": "initials or handle", "tool": "Sonic Visualiser", "notes": "Onsets checked at 10 ms zoom." }
+      }
+    }
+  ]
+}

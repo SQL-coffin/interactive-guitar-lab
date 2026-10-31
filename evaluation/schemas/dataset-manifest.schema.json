@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SQL-coffin/interactive-guitar-lab/evaluation/schemas/dataset-manifest.schema.json",
+  "title": "Guitar note-event evaluation dataset manifest (dataset.json)",
+  "description": "Documentation of the manifest format. guitar_eval.datasets is the authoritative validator and also checks cross-field rules this schema cannot express: file existence and SHA-256 checksums, audio sample rate/duration, split overlap, unknown split members, and synthetic consistency.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "datasetId",
+    "version",
+    "description",
+    "license",
+    "splits",
+    "recordings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "datasetId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version. Bump whenever any audio file, annotation or split changes; checksums enforce this."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "license": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Licence of the audio and annotations. Only include data you may redistribute; keep the rest local."
+    },
+    "splits": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "description": "Split name -> recording ids. Splits must not overlap."
+    },
+    "recordings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/recording"
+      }
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative to the dataset directory; no absolute paths or '..'."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "recording": {
+      "type": "object",
+      "required": [
+        "id",
+        "audio",
+        "annotation",
+        "scenarios",
+        "metadata"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+        },
+        "audio": {
+          "$ref": "#/$defs/file"
+        },
+        "annotation": {
+          "$ref": "#/$defs/file"
+        },
+        "scenarios": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "single-notes",
+              "chromatic-scales",
+              "repeated-notes",
+              "sustained-notes",
+              "natural-decay",
+              "polyphonic-chords",
+              "arpeggios",
+              "slides",
+              "hammer-ons-pull-offs",
+              "strumming",
+              "background-noise"
+            ]
+          }
+        },
+        "metadata": {
+          "$ref": "#/$defs/metadata"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "source",
+        "sampleRateHz",
+        "durationSeconds",
+        "instrument",
+        "tuning",
+        "recordingMethod",
+        "conditions",
+        "annotationSource"
+      ],
+      "properties": {
+        "source": {
+          "enum": [
+            "real",
+            "synthetic"
+          ],
+          "description": "'real' recordings are the only ones that count as real-world evidence."
+        },
+        "sampleRateHz": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Must equal the audio file's sample rate."
+        },
+        "durationSeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Must match the audio file within 0.01 s."
+        },
+        "instrument": {
+          "enum": [
+            "acoustic-guitar",
+            "electric-guitar",
+            "classical-guitar",
+            "synthetic",
+            "other"
+          ]
+        },
+        "tuning": {
+          "type": "object",
+          "required": [
+            "name",
+            "stringsMidi"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "stringsMidi": {
+              "type": "array",
+              "minItems": 4,
+              "maxItems": 12,
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 127
+              },
+              "description": "Open-string MIDI notes, lowest-pitched string first (string 1)."
+            }
+          }
+        },
+        "recordingMethod": {
+          "enum": [
+            "di",
+            "processed",
+            "microphone",
+            "mixed",
+            "synthetic"
+          ],
+          "description": "di = direct input, dry; processed = DI with amp/effects; microphone = mic'd source."
+        },
+        "conditions": {
+          "type": "object",
+          "required": [
+            "noise"
+          ],
+          "properties": {
+            "environment": {
+              "type": "string"
+            },
+            "noise": {
+              "enum": [
+                "none",
+                "low",
+                "moderate",
+                "high"
+              ]
+            },
+            "effects": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "annotationSource": {
+          "type": "object",
+          "required": [
+            "method"
+          ],
+          "properties": {
+            "method": {
+              "enum": [
+                "manual",
+                "semi-automatic",
+                "hexaphonic-pickup",
+                "midi-aligned",
+                "synthetic"
+              ]
+            },
+            "annotator": {
+              "type": "string"
+            },
+            "tool": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

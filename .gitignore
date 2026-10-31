@@ -8,3 +8,5 @@ next-env.d.ts
 e2e/fixtures/
 __pycache__/
 .venv/
+evaluation/datasets/local/
+evaluation/results/

@@ -49,6 +49,29 @@ jobs:
       - name: Generate contract fixtures from the current worker
         run: python contract_fixtures.py "$RUNNER_TEMP/worker-contract"
 
+      # Evaluation framework (evaluation/): matching, metrics, dataset validation, runner, report.
+      # Uses the worker's dependencies only; no extra packages.
+      - name: Run evaluation framework tests
+        working-directory: evaluation
+        run: python -m pytest -v
+
+      # Smoke run of the benchmark on the deterministic synthetic dataset. This checks that the
+      # pipeline runs end to end; it is NOT an accuracy gate and the numbers are not real-world.
+      - name: Synthetic benchmark smoke run
+        working-directory: evaluation
+        run: |
+          python -m guitar_eval make-synthetic "$RUNNER_TEMP/synthetic-smoke"
+          python -m guitar_eval validate "$RUNNER_TEMP/synthetic-smoke"
+          python -m guitar_eval run "$RUNNER_TEMP/synthetic-smoke" --output "$RUNNER_TEMP/benchmark"
+          cat "$RUNNER_TEMP/benchmark/report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: synthetic-benchmark-report
+          path: ${{ runner.temp }}/benchmark
+          if-no-files-found: error
+          retention-days: 7
+
       - uses: actions/upload-artifact@v7
         with:
           name: worker-contract-fixtures
