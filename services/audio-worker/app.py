@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 import math
 from typing import Annotated, Any, Literal
 
@@ -10,22 +9,69 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field
 
-SAMPLE_RATE = 22_050
+from audio_io import MAX_DURATION_SECONDS, MAX_UPLOAD_BYTES, SAMPLE_RATE, AudioInputError, decode_audio
+from note_events import extract_note_events
+
 HOP_LENGTH = 512
 FFT_SIZE = 4_096
-MAX_UPLOAD_BYTES = 25 * 1024 * 1024
-MAX_DURATION_SECONDS = 600.0
 SUPPORTED_CHROMA_BINS = 12
 MIN_BASS_HZ = 35.0
 MAX_BASS_HZ = 250.0
 
 
-class AudioInputError(ValueError):
-    """Raised when an uploaded file cannot be decoded or exceeds supported limits."""
-
-
 class ApiModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
+
+
+class GuitarNoteAttributesModel(ApiModel):
+    """Reserved for future guitar-specific models; the heuristic baseline never emits it."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+    string_number: int | None = Field(default=None, alias="stringNumber", ge=1, le=12)
+    fret: int | None = Field(default=None, ge=0, le=36)
+    techniques: list[str] | None = None
+    strum_group_id: int | None = Field(default=None, alias="strumGroupId", ge=0)
+
+
+class NoteEventItem(ApiModel):
+    # Validation is done by note_events.NoteEvent before serialisation; this model documents the shape.
+    pitch_midi: int = Field(alias="pitchMidi", ge=0, le=127)
+    onset_seconds: float = Field(alias="onsetSeconds", ge=0, allow_inf_nan=False)
+    offset_seconds: float | None = Field(alias="offsetSeconds", allow_inf_nan=False)
+    onset_confidence: float = Field(alias="onsetConfidence", ge=0, le=1, allow_inf_nan=False)
+    offset_confidence: float | None = Field(alias="offsetConfidence", ge=0, le=1, allow_inf_nan=False)
+    pitch_confidence: float = Field(alias="pitchConfidence", ge=0, le=1, allow_inf_nan=False)
+    source: Literal["heuristic", "model"]
+    guitar: GuitarNoteAttributesModel | None = None
+
+
+class NoteEventModelInfo(ApiModel):
+    name: str
+    version: str
+    source: Literal["heuristic", "model"]
+    calibrated: bool
+
+
+class PitchRange(ApiModel):
+    min: int = Field(ge=0, le=127)
+    max: int = Field(ge=0, le=127)
+
+
+class NoteEventAnalysis(ApiModel):
+    schema_version: Literal["1.0"] = Field(alias="schemaVersion")
+    model: NoteEventModelInfo
+    frame_rate_hz: float = Field(alias="frameRateHz")
+    pitch_range_midi: PitchRange = Field(alias="pitchRangeMidi")
+    truncated: bool
+    events: list[NoteEventItem]
+
+
+class NoteEventResponse(ApiModel):
+    schema_version: Literal["1.0"] = Field(default="1.0", alias="schemaVersion")
+    filename: str
+    duration_seconds: float = Field(alias="durationSeconds")
+    sample_rate: int = Field(alias="sampleRate")
+    note_events: NoteEventAnalysis = Field(alias="noteEvents")
 
 
 class ChromaFrame(ApiModel):
@@ -56,12 +102,18 @@ class ChromaResponse(ApiModel):
     windowing_mode: Literal["adaptive-beat-aligned", "beat-aligned", "fixed-window"] = Field(default="fixed-window", alias="windowingMode")
     window_strategy: Literal["manual", "auto"] = Field(default="manual", alias="windowStrategy")
     frames: list[ChromaFrame]
+    # Present only when the request opted in with includeNoteEvents=true. The endpoint serialises
+    # with response_model_exclude_unset so the default response keeps its original keys.
+    note_events: NoteEventAnalysis | None = Field(default=None, alias="noteEvents")
 
 
 app = FastAPI(
     title="Interactive Guitar Lab Audio Worker",
     version="0.1.0",
-    description="Extracts time-aligned chroma features; chord interpretation remains in TypeScript.",
+    description=(
+        "Extracts time-aligned chroma features and heuristic note-event candidates; "
+        "chord interpretation remains in TypeScript."
+    ),
 )
 
 
@@ -371,13 +423,22 @@ def build_adaptive_analysis_intervals(
     return intervals, "adaptive-beat-aligned"
 
 
+def safe_upload_filename(filename: str) -> str:
+    return filename.replace("\\", "/").rsplit("/", maxsplit=1)[-1] or "audio-upload"
+
+
 def extract_chroma_features(
     payload: bytes,
     filename: str = "audio-upload",
     window_seconds: float = 0.5,
     window_strategy: Literal["manual", "auto"] = "manual",
+    include_note_events: bool = False,
 ) -> dict[str, Any]:
-    """Decode audio into chroma frames using either manual or adaptive windowing."""
+    """Decode audio into chroma frames using either manual or adaptive windowing.
+
+    With include_note_events, the same decoded samples are also passed to the note-event layer,
+    so one upload and one decode serve both analyses. Chroma output is unaffected either way.
+    """
     if not payload:
         raise AudioInputError("The uploaded audio file is empty.")
     if not 0.1 <= window_seconds <= 2.0 or not math.isfinite(window_seconds):
@@ -385,21 +446,7 @@ def extract_chroma_features(
     if window_strategy not in ("manual", "auto"):
         raise AudioInputError("windowStrategy must be manual or auto.")
 
-    try:
-        samples, sample_rate = librosa.load(
-            io.BytesIO(payload),
-            sr=SAMPLE_RATE,
-            mono=True,
-        )
-    except Exception as exc:
-        raise AudioInputError("Unable to decode audio. Try a WAV, FLAC, OGG, or MP3 file.") from exc
-
-    if samples.size == 0:
-        raise AudioInputError("No audio samples were found in the uploaded file.")
-
-    duration_seconds = float(samples.shape[0] / sample_rate)
-    if duration_seconds > MAX_DURATION_SECONDS:
-        raise AudioInputError(f"Audio duration exceeds the {int(MAX_DURATION_SECONDS)}-second limit.")
+    samples, sample_rate, duration_seconds = decode_audio(payload)
 
     time_signature_numerator: int | None = None
     time_signature_denominator: int | None = None
@@ -528,7 +575,7 @@ def extract_chroma_features(
     # Raw STFT hops are aggregated into either beat-aligned windows or fixed fallback windows.
     # This bounds the response while avoiding arbitrary one-second cuts when beat tracking succeeds.
     frames: list[dict[str, Any]] = []
-    safe_filename = filename.replace("\\", "/").rsplit("/", maxsplit=1)[-1] or "audio-upload"
+    safe_filename = safe_upload_filename(filename)
 
     for start_seconds, end_seconds in analysis_intervals:
         selected = np.flatnonzero((frame_times >= start_seconds) & (frame_times < end_seconds))
@@ -555,7 +602,7 @@ def extract_chroma_features(
             ),
         })
 
-    return {
+    result: dict[str, Any] = {
         "schemaVersion": "1.0",
         "filename": safe_filename,
         "durationSeconds": round(duration_seconds, 4),
@@ -574,6 +621,29 @@ def extract_chroma_features(
         },
         "frames": frames,
     }
+    if include_note_events:
+        result["noteEvents"] = extract_note_events(samples, sample_rate)
+    return result
+
+
+def extract_note_event_features(payload: bytes, filename: str = "audio-upload") -> dict[str, Any]:
+    """Decode audio and return heuristic note-event candidates (no chroma)."""
+    samples, sample_rate, duration_seconds = decode_audio(payload)
+    return {
+        "schemaVersion": "1.0",
+        "filename": safe_upload_filename(filename),
+        "durationSeconds": round(duration_seconds, 4),
+        "sampleRate": int(sample_rate),
+        "noteEvents": extract_note_events(samples, sample_rate),
+    }
+
+
+async def read_bounded_upload(file: UploadFile) -> bytes:
+    payload = await file.read(MAX_UPLOAD_BYTES + 1)
+    await file.close()
+    if len(payload) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Uploaded file exceeds the 25 MiB limit.")
+    return payload
 
 
 @app.get("/health")
@@ -581,17 +651,14 @@ def health() -> dict[str, str]:
     return {"status": "ok", "service": "audio-worker", "schemaVersion": "1.0"}
 
 
-@app.post("/v1/features/chroma", response_model=ChromaResponse)
+@app.post("/v1/features/chroma", response_model=ChromaResponse, response_model_exclude_unset=True)
 async def create_chroma_features(
     file: Annotated[UploadFile, File()],
     window_seconds: Annotated[float, Form(alias="windowSeconds", ge=0.1, le=2.0)] = 0.5,
     window_strategy: Annotated[Literal["manual", "auto"], Form(alias="windowStrategy")] = "manual",
+    include_note_events: Annotated[bool, Form(alias="includeNoteEvents")] = False,
 ) -> dict[str, Any]:
-    payload = await file.read(MAX_UPLOAD_BYTES + 1)
-    await file.close()
-    if len(payload) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="Uploaded file exceeds the 25 MiB limit.")
-
+    payload = await read_bounded_upload(file)
     try:
         return await run_in_threadpool(
             extract_chroma_features,
@@ -599,6 +666,21 @@ async def create_chroma_features(
             file.filename or "audio-upload",
             window_seconds,
             window_strategy,
+            include_note_events,
+        )
+    except AudioInputError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+# exclude_unset keeps the optional, reserved per-event "guitar" key out of the payload until a model sets it.
+@app.post("/v1/features/note-events", response_model=NoteEventResponse, response_model_exclude_unset=True)
+async def create_note_event_features(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
+    payload = await read_bounded_upload(file)
+    try:
+        return await run_in_threadpool(
+            extract_note_event_features,
+            payload,
+            file.filename or "audio-upload",
         )
     except AudioInputError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -3,6 +3,7 @@ import { buildChordSheet, type ChordSheetResult } from "./chord-sheet.js";
 import { extractAudioFeatures, type AudioFeatureResponse, type AudioWorkerClientOptions } from "./worker-client.js";
 import { analyzeKeyCandidates, type KeyAnalysisResult } from "./key-analysis.js";
 import { detectKeyChanges, type KeyChangeDetectionResult, type KeyChangeDetectionOptions } from "./key-change-detection.js";
+import type { NoteEventAnalysis } from "./note-events.js";
 
 export interface AnalyzeAudioForChordsOptions extends AudioWorkerClientOptions {
   chordAnalysis?: ChromaProgressionAnalysisOptions;
@@ -10,7 +11,7 @@ export interface AnalyzeAudioForChordsOptions extends AudioWorkerClientOptions {
 }
 
 export interface AnalyzeAudioForChordsResult {
-  audio: Omit<AudioFeatureResponse, "frames">;
+  audio: Omit<AudioFeatureResponse, "frames" | "noteEvents">;
   chordAnalysis: ChromaProgressionAnalysisResult;
   /** Conservative, editable chord-event timeline derived from the raw frame hypotheses. */
   chordSheet: ChordSheetResult;
@@ -18,6 +19,11 @@ export interface AnalyzeAudioForChordsResult {
   keyAnalysis?: KeyAnalysisResult;
   /** Independent, conservative local-key change analysis; does not replace the song-level key estimate. */
   keyChangeDetection?: KeyChangeDetectionResult;
+  /**
+   * Heuristic note-event candidates; present only when `includeNoteEvents` was requested.
+   * Independent of the chord pipeline: chord, key and chord-sheet results never read it.
+   */
+  noteEvents?: NoteEventAnalysis;
 }
 
 /**
@@ -45,6 +51,13 @@ export async function analyzeAudioForChords(
     barDurationSeconds: features.rhythm.barDurationSeconds ?? null,
     downbeatTimesSeconds: features.rhythm.downbeatTimesSeconds ?? [],
   });
-  const { frames: _frames, ...metadata } = features;
-  return { audio: metadata, chordAnalysis, chordSheet, keyAnalysis, keyChangeDetection };
+  const { frames: _frames, noteEvents, ...metadata } = features;
+  return {
+    audio: metadata,
+    chordAnalysis,
+    chordSheet,
+    keyAnalysis,
+    keyChangeDetection,
+    ...(noteEvents === undefined ? {} : { noteEvents }),
+  };
 }

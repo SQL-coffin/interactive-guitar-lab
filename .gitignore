@@ -6,3 +6,5 @@ coverage/
 next-env.d.ts
 .env*.local
 e2e/fixtures/
+__pycache__/
+.venv/

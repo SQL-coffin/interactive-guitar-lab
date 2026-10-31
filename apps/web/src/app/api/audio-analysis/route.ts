@@ -134,6 +134,16 @@ export async function POST(request: Request): Promise<Response> {
     windowStrategy = strategyText;
   }
 
+  // Opt-in heuristic note-event candidates. Omitted or "false" keeps the response exactly as before.
+  const noteEventsText = form.get("includeNoteEvents");
+  let includeNoteEvents = false;
+  if (noteEventsText !== null) {
+    if (noteEventsText !== "true" && noteEventsText !== "false") {
+      return apiError(400, "invalid_request", "includeNoteEvents must be either true or false.");
+    }
+    includeNoteEvents = noteEventsText === "true";
+  }
+
   const optionsText = form.get("options");
   let rawOptions: unknown;
   if (optionsText !== null) {
@@ -154,6 +164,7 @@ export async function POST(request: Request): Promise<Response> {
       filename: uploaded.name || "audio-upload",
       ...(windowSeconds === undefined ? {} : { windowSeconds }),
       ...(windowStrategy === undefined ? {} : { windowStrategy }),
+      ...(includeNoteEvents ? { includeNoteEvents } : {}),
       chordAnalysis,
       // Stop the worker request when the browser cancels or disconnects.
       signal: request.signal,

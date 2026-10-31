@@ -1,4 +1,5 @@
 import type { ChromaFrame } from "./types.js";
+import { NoteEventValidationError, parseNoteEventAnalysis, type NoteEventAnalysis } from "./note-events.js";
 
 export interface AudioWorkerClientOptions {
   /** Base URL for the private Python audio-worker service, e.g. http://127.0.0.1:8010. */
@@ -9,6 +10,22 @@ export interface AudioWorkerClientOptions {
   timeoutMs?: number;
   /** Aborts the worker request early, e.g. when the HTTP client that started it disconnects. */
   signal?: AbortSignal;
+  /**
+   * Opt in to heuristic note-event candidates computed from the same upload and decode as the
+   * chroma frames. Defaults to false, which leaves the request and response exactly as before.
+   */
+  includeNoteEvents?: boolean;
+}
+
+/** Options for the standalone note-event endpoint; shares transport limits with the chroma call. */
+export type NoteEventWorkerClientOptions = Pick<AudioWorkerClientOptions, "baseUrl" | "filename" | "timeoutMs" | "signal">;
+
+export interface NoteEventFeatureResponse {
+  schemaVersion: "1.0";
+  filename: string;
+  durationSeconds: number;
+  sampleRate: number;
+  noteEvents: NoteEventAnalysis;
 }
 
 export interface AudioFeatureResponse {
@@ -34,6 +51,8 @@ export interface AudioFeatureResponse {
     downbeatTimesSeconds: number[];
   };
   frames: ChromaFrame[];
+  /** Present only when includeNoteEvents was requested. */
+  noteEvents?: NoteEventAnalysis;
 }
 
 export class AudioWorkerError extends Error {
@@ -50,7 +69,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function parseFeatureResponse(value: unknown): AudioFeatureResponse {
+function parseNoteEventsField(value: unknown, durationSeconds: number): NoteEventAnalysis {
+  try {
+    return parseNoteEventAnalysis(value, durationSeconds);
+  } catch (error) {
+    if (error instanceof NoteEventValidationError) {
+      throw new AudioWorkerError(`Audio worker returned invalid note events: ${error.message}`, null);
+    }
+    throw error;
+  }
+}
+
+function parseFeatureResponse(value: unknown, includeNoteEvents = false): AudioFeatureResponse {
   if (!isRecord(value) || value.schemaVersion !== "1.0" || !Array.isArray(value.frames)
       || !isRecord(value.rhythm)) {
     throw new AudioWorkerError("Audio worker returned an unsupported feature response.", null);
@@ -134,26 +164,35 @@ function parseFeatureResponse(value: unknown): AudioFeatureResponse {
       downbeatTimesSeconds: downbeatTimesSeconds as number[],
     },
     frames,
+    ...(includeNoteEvents ? { noteEvents: parseNoteEventsField(value.noteEvents, value.durationSeconds) } : {}),
   };
 }
 
-/** Calls the local Python feature service and validates its JSON contract at runtime. */
-export async function extractAudioFeatures(
-  audio: Blob,
-  input: AudioWorkerClientOptions,
-): Promise<AudioFeatureResponse> {
-  const windowSeconds = input.windowSeconds ?? 0.5;
-  const timeoutMs = input.timeoutMs ?? 120_000;
-  if (!Number.isFinite(windowSeconds) || windowSeconds < 0.1 || windowSeconds > 2) {
-    throw new RangeError("windowSeconds must be between 0.1 and 2.0.");
+function parseNoteEventFeatureResponse(value: unknown): NoteEventFeatureResponse {
+  if (!isRecord(value) || value.schemaVersion !== "1.0" || typeof value.filename !== "string"
+      || typeof value.durationSeconds !== "number" || !Number.isFinite(value.durationSeconds) || value.durationSeconds < 0
+      || typeof value.sampleRate !== "number" || !Number.isInteger(value.sampleRate) || value.sampleRate <= 0) {
+    throw new AudioWorkerError("Audio worker returned an unsupported note-event response.", null);
   }
+  return {
+    schemaVersion: "1.0",
+    filename: value.filename,
+    durationSeconds: value.durationSeconds,
+    sampleRate: value.sampleRate,
+    noteEvents: parseNoteEventsField(value.noteEvents, value.durationSeconds),
+  };
+}
+
+function validateTimeout(timeoutMs: number): void {
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 600_000) {
     throw new RangeError("timeoutMs must be an integer between 1000 and 600000.");
   }
+}
 
+function resolveWorkerEndpoint(path: string, baseUrl: string): string {
   let endpoint: string;
   try {
-    endpoint = new URL("/v1/features/chroma", input.baseUrl).toString();
+    endpoint = new URL(path, baseUrl).toString();
   } catch {
     throw new TypeError("baseUrl must be an absolute HTTP(S) URL.");
   }
@@ -161,18 +200,25 @@ export async function extractAudioFeatures(
   if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
     throw new TypeError("baseUrl must use HTTP or HTTPS.");
   }
+  return endpoint;
+}
 
-  const form = new FormData();
-  form.append("file", audio, input.filename || "audio-upload");
-  form.append("windowSeconds", String(windowSeconds));
-  if (input.windowStrategy !== undefined) form.append("windowStrategy", input.windowStrategy);
-
+/**
+ * Shared transport for every worker endpoint: one timeout, caller cancellation, and error mapping,
+ * so chroma and note-event requests behave identically when the worker is slow or the client leaves.
+ */
+async function postWorkerForm(
+  endpoint: string,
+  form: FormData,
+  timeoutMs: number,
+  signal: AbortSignal | undefined,
+): Promise<unknown> {
   let response: Response;
   try {
     response = await fetch(endpoint, {
       method: "POST",
       body: form,
-      signal: input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown network error.";
@@ -196,5 +242,46 @@ export async function extractAudioFeatures(
       : `Audio worker returned HTTP ${response.status}.`;
     throw new AudioWorkerError(message, response.status);
   }
-  return parseFeatureResponse(payload);
+  return payload;
+}
+
+/** Calls the local Python feature service and validates its JSON contract at runtime. */
+export async function extractAudioFeatures(
+  audio: Blob,
+  input: AudioWorkerClientOptions,
+): Promise<AudioFeatureResponse> {
+  const windowSeconds = input.windowSeconds ?? 0.5;
+  const timeoutMs = input.timeoutMs ?? 120_000;
+  if (!Number.isFinite(windowSeconds) || windowSeconds < 0.1 || windowSeconds > 2) {
+    throw new RangeError("windowSeconds must be between 0.1 and 2.0.");
+  }
+  validateTimeout(timeoutMs);
+  const endpoint = resolveWorkerEndpoint("/v1/features/chroma", input.baseUrl);
+
+  const form = new FormData();
+  form.append("file", audio, input.filename || "audio-upload");
+  form.append("windowSeconds", String(windowSeconds));
+  if (input.windowStrategy !== undefined) form.append("windowStrategy", input.windowStrategy);
+  const includeNoteEvents = input.includeNoteEvents === true;
+  if (includeNoteEvents) form.append("includeNoteEvents", "true");
+
+  const payload = await postWorkerForm(endpoint, form, timeoutMs, input.signal);
+  return parseFeatureResponse(payload, includeNoteEvents);
+}
+
+/**
+ * Calls the standalone note-event endpoint. Use this when chroma is not needed; to get both from
+ * one upload, pass includeNoteEvents to extractAudioFeatures instead.
+ */
+export async function extractNoteEvents(
+  audio: Blob,
+  input: NoteEventWorkerClientOptions,
+): Promise<NoteEventFeatureResponse> {
+  const timeoutMs = input.timeoutMs ?? 120_000;
+  validateTimeout(timeoutMs);
+  const endpoint = resolveWorkerEndpoint("/v1/features/note-events", input.baseUrl);
+  const form = new FormData();
+  form.append("file", audio, input.filename || "audio-upload");
+  const payload = await postWorkerForm(endpoint, form, timeoutMs, input.signal);
+  return parseNoteEventFeatureResponse(payload);
 }
