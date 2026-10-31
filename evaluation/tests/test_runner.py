@@ -64,12 +64,36 @@ class RunnerTests(unittest.TestCase):
         self.assertIn("hammer-on", results["detector"]["unsupportedTechniques"])
         self.assertEqual(results["matchConfig"]["onsetToleranceSeconds"], 0.05)
         self.assertEqual(len(results["recordings"]), 11)
-        self.assertEqual(set(results["summary"]["byCapability"]), {"baseline", "experimental"})
+        self.assertEqual(set(results["summary"]["byCapability"]), {"baseline", "experimental", "mixed"})
 
     def test_aggregate_counts_equal_the_sum_of_recordings(self) -> None:
         overall = self.results["summary"]["overall"]["onset"]
         for key in ("truePositives", "falsePositives", "falseNegatives"):
             self.assertEqual(overall[key], sum(r["onset"][key] for r in self.results["recordings"]))
+
+    def test_mixed_scenario_recordings_are_separated_from_isolated_scenario_results(self) -> None:
+        summary = self.results["summary"]
+        mixed = {item["recordingId"]: item["scenarios"] for item in summary["mixedScenarioRecordings"]}
+        self.assertEqual(mixed, {"noisy-room": ["background-noise", "single-notes"],
+                                 "strumming": ["polyphonic-chords", "strumming"]})
+        self.assertEqual(summary["byScenario"]["single-notes"]["recordingIds"], ["single-notes"])
+        self.assertEqual(summary["byScenario"]["polyphonic-chords"]["recordingIds"], ["chords"])
+        self.assertEqual(summary["byScenario"]["background-noise"]["recordings"], 0)
+        self.assertEqual(summary["byScenario"]["strumming"]["recordings"], 0)
+        self.assertTrue(summary["byScenarioTag"]["strumming"]["overlapsOtherScenarios"])
+        self.assertEqual(summary["byCapability"]["mixed"]["recordingIds"], ["noisy-room", "strumming"])
+        overall = summary["overall"]["onset"]
+        for key in ("truePositives", "falsePositives", "falseNegatives"):
+            self.assertEqual(sum(group["onset"][key] for group in summary["byCapability"].values()), overall[key])
+
+    def test_report_does_not_present_mixed_recordings_as_isolated_scenario_accuracy(self) -> None:
+        report = render_markdown(self.results)
+        self.assertIn("## By scenario (isolated recordings only)", report)
+        self.assertIn("## Mixed-scenario recordings", report)
+        self.assertIn("| Background noise (experimental) | 0 | no isolated recordings", report)
+        self.assertIn("| noisy-room | background-noise, single-notes |", report)
+        self.assertIn("Mixed (spans baseline and experimental)", report)
+        self.assertIn("False discovery rate", report)
 
     def test_partial_annotation_and_optional_reference_are_applied(self) -> None:
         noisy = next(r for r in self.results["recordings"] if r["recordingId"] == "noisy-room")

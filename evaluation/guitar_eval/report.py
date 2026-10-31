@@ -61,15 +61,20 @@ def render_markdown(results: dict[str, Any]) -> str:
         PRF_HEADER,
         _prf_row("All recordings", overall),
     ]
+    capability_labels = {"baseline": "Baseline scenarios only", "experimental": "Experimental scenarios only",
+                         "mixed": "Mixed (spans baseline and experimental)"}
     for group_name, group in results["summary"].get("byCapability", {}).items():
         if group["recordings"]:
-            lines.append(_prf_row(f"{group_name.capitalize()} scenarios", group))
+            lines.append(_prf_row(capability_labels.get(group_name, group_name), group))
     fp_per_minute = overall["falsePositivesPerMinute"]
     lines += [
         "",
         f"- Macro onset F1 (mean over recordings with defined F1): {_pct(overall['macroOnsetF1'])}",
-        f"- False positive rate (FP / predictions): {_pct(overall['falsePositiveRate'])}; "
-        f"false positives per minute: {'n/a' if fp_per_minute is None else format(fp_per_minute, '.1f')}",
+        "- Capability rows partition the recordings: each recording appears in exactly one row.",
+        f"- False positive rate (FP / all evaluated predictions, including those absorbed by optional references): "
+        f"{_pct(overall['falsePositiveRate'])}",
+        f"- False discovery rate (FP / (TP + FP) = 1 − precision): {_pct(overall['falseDiscoveryRate'])}",
+        f"- False positives per minute: {'n/a' if fp_per_minute is None else format(fp_per_minute, '.1f')}",
         f"- Missed note rate (FN / references): {_pct(overall['missedNoteRate'])}",
         f"- Octave errors (pitch-agnostic onset matches): {overall['pitch']['octaveErrors']}",
         f"- Open-ended predictions (null offset): {overall['openEndedPredictions']}",
@@ -84,10 +89,36 @@ def render_markdown(results: dict[str, Any]) -> str:
         lines.append(f"| {label} | {stats['count']} | {_ms(stats['meanAbsolute'])} | {_ms(stats['medianAbsolute'])} "
                      f"| {_ms(stats['p95Absolute'])} | {_ms(stats['maxAbsolute'])} | {_ms(stats['meanSigned'])} |")
 
-    lines += ["", "## By scenario", "", PRF_HEADER.replace("| Group |", "| Scenario (capability) |")]
-    for scenario_id, group in results["summary"]["byScenario"].items():
+    summary = results["summary"]
+    lines += ["", "## By scenario (isolated recordings only)", "",
+              "Scenarios are recording tags, and annotations are not labelled per scenario. A scenario's row therefore "
+              "counts only recordings tagged with that scenario alone. Recordings with several tags are listed under "
+              "*Mixed-scenario recordings* and are never attributed to a single scenario.", "",
+              PRF_HEADER.replace("| Group |", "| Scenario (capability) |")]
+    for scenario_id, group in summary["byScenario"].items():
         scenario = results["scenarios"][scenario_id]
-        lines.append(_prf_row(f"{scenario['title']} ({scenario['capability']})", group))
+        label = f"{scenario['title']} ({scenario['capability']})"
+        if group["recordings"]:
+            lines.append(_prf_row(label, group))
+        else:
+            tagged = summary["byScenarioTag"][scenario_id]["recordings"]
+            lines.append(f"| {label} | 0 | no isolated recordings; appears in {tagged} mixed recording(s) |  |  |  |  |  |  |  |")
+
+    mixed = summary["mixedScenarioRecordings"]
+    lines += ["", "## Mixed-scenario recordings", ""]
+    if mixed:
+        by_id = {recording["recordingId"]: recording for recording in results["recordings"]}
+        lines += ["These recordings combine scenarios, so their errors cannot be assigned to one scenario.", "",
+                  "| Recording | Scenario tags | TP | FP | FN | F1 (onset) | Pitch acc. |",
+                  "| --- | --- | ---: | ---: | ---: | ---: | ---: |"]
+        for item in mixed:
+            recording = by_id[item["recordingId"]]
+            onset = recording["onset"]
+            lines.append(f"| {item['recordingId']} | {', '.join(item['scenarios'])} | {onset['truePositives']} | "
+                         f"{onset['falsePositives']} | {onset['falseNegatives']} | {_pct(onset['f1'])} | "
+                         f"{_pct(recording['pitch']['accuracy'])} |")
+    else:
+        lines.append("None: every recording has a single scenario tag.")
 
     techniques = overall["byTechnique"]
     if techniques:
@@ -141,7 +172,7 @@ def render_markdown(results: dict[str, Any]) -> str:
               "- Detector confidences are not used for matching; precision/recall reflect the detector's own thresholds.",
               "- Timing tolerances are configurable; results are not comparable across runs with different settings.",
               ]
-    for scenario_id in results["summary"]["byScenario"]:
+    for scenario_id in summary["byScenario"]:
         scenario = results["scenarios"][scenario_id]
         lines.append(f"- {scenario['title']} ({scenario['capability']}): {scenario['knownLimitation']}")
     return "\n".join(lines) + "\n"

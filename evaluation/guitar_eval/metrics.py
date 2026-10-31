@@ -5,8 +5,11 @@ Definitions (counts are over *required* reference notes; see MatchConfig.min_ref
 * onset mode: a true positive is a pitch + onset match. onsetOffset mode also requires the offset.
 * precision = TP / (TP + FP), recall = TP / (TP + FN), F1 = harmonic mean. A ratio with a zero
   denominator is reported as null (undefined), never silently as 0 or 1.
-* falsePositiveRate = FP / evaluated predictions (= 1 - precision); missedNoteRate = FN / references
-  (= 1 - recall); falsePositivesPerMinute normalises FP by audio duration.
+* falsePositiveRate = FP / evaluated predictions. Its denominator includes predictions absorbed by
+  optional references, so it is NOT 1 - precision when optional references are present.
+* falseDiscoveryRate = FP / (TP + FP), which equals 1 - precision whenever precision is defined.
+* missedNoteRate = FN / required references (= 1 - recall); falsePositivesPerMinute normalises FP by
+  audio duration.
 * pitch accuracy: among notes whose onset was detected, the share with the right pitch. Correct =
   onset-mode true positives (pitch + onset). Wrong-pitch pairs = references and predictions left over
   after that, matched again on onset alone. Matching pitch first keeps simultaneous chord notes from
@@ -18,6 +21,20 @@ Definitions (counts are over *required* reference notes; see MatchConfig.min_ref
   counted as hits or misses. Required references are matched first so they keep priority.
 * With annotated_regions (partial annotations), predictions whose onset lies outside every region
   (widened by the onset tolerance) are ignored and reported as ignoredPredictions.
+
+Scenario semantics (aggregate): scenarios are *recording tags*. A recording tagged with several
+scenarios (e.g. background noise + single notes) cannot be split by scenario, because annotations are
+not labelled per scenario. So:
+
+* byScenario[s] - "isolated" result: only recordings tagged with s and nothing else. This is the only
+  per-scenario number that can be read as that scenario's accuracy.
+* mixedScenarioRecordings - every recording with more than one tag, listed with its tags. Such a
+  recording is never attributed to any single scenario's isolated result.
+* byScenarioTag[s] - every recording carrying tag s, mixed or not. Cohorts overlap; each entry
+  lists mixedRecordingIds and overlapsOtherScenarios so it is never mistaken for isolated accuracy.
+* byCapability - a partition: recordings whose tags all fall in one capability group, plus "mixed"
+  for recordings spanning groups. Groups sum exactly to the overall totals.
+* overall - every recording once, independent of tags.
 """
 from __future__ import annotations
 
@@ -174,6 +191,7 @@ def evaluate_recording(
         "offsetErrorMs": _error_stats(offset_errors),
         "openEndedPredictions": sum(1 for i in evaluated if predictions[i].offset_seconds is None),
         "falsePositiveRate": _ratio(onset_fp, evaluated_count),
+        "falseDiscoveryRate": _ratio(onset_fp, onset["truePositives"] + onset_fp),
         "missedNoteRate": _ratio(onset["falseNegatives"], len(required)),
         "falsePositivesPerMinute": None if duration_seconds <= 0 else onset_fp / (duration_seconds / 60),
         "byTechnique": dict(sorted(by_technique.items())),
@@ -211,6 +229,7 @@ def _summarize(results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         bucket["recall"] = _ratio(bucket["matched"], bucket["references"])
     return {
         "recordings": len(results),
+        "recordingIds": [result["recordingId"] for result in results],
         "durationSeconds": duration,
         "counts": {key: total(("counts", key)) for key in (
             "references", "optionalReferences", "predictions", "evaluatedPredictions", "ignoredPredictions", "predictionsMatchedToOptional")},
@@ -222,6 +241,7 @@ def _summarize(results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "offsetErrorMs": _error_stats([m["offsetErrorMs"] for result in results for m in result["matches"] if m["offsetErrorMs"] is not None]),
         "openEndedPredictions": total(("openEndedPredictions",)),
         "falsePositiveRate": _ratio(onset["falsePositives"], evaluated),
+        "falseDiscoveryRate": _ratio(onset["falsePositives"], onset["truePositives"] + onset["falsePositives"]),
         "missedNoteRate": _ratio(onset["falseNegatives"], references),
         "falsePositivesPerMinute": None if duration <= 0 else onset["falsePositives"] / (duration / 60),
         "byTechnique": dict(sorted(techniques.items())),
@@ -234,19 +254,37 @@ def aggregate(
     scenarios_by_recording: Mapping[str, Sequence[str]],
     scenario_groups: Mapping[str, Collection[str]] | None = None,
 ) -> dict[str, Any]:
-    """Micro-averaged totals overall, per scenario, and per named group of scenarios."""
+    """Micro-averaged totals: overall, isolated per scenario, overlapping per tag, and per capability.
+
+    See the module docstring for why mixed-scenario recordings are kept out of isolated results.
+    """
     ordered = sorted(results, key=lambda result: result["recordingId"])
-    scenario_ids = sorted({scenario for values in scenarios_by_recording.values() for scenario in values})
+    tags = {recording_id: sorted(set(values)) for recording_id, values in scenarios_by_recording.items()}
+
+    def tags_of(result: Mapping[str, Any]) -> list[str]:
+        return tags.get(result["recordingId"], [])
+
+    scenario_ids = sorted({scenario for values in tags.values() for scenario in values})
+    mixed = [result for result in ordered if len(tags_of(result)) > 1]
+    by_tag: dict[str, Any] = {}
+    for scenario in scenario_ids:
+        tagged = [result for result in ordered if scenario in tags_of(result)]
+        mixed_ids = [result["recordingId"] for result in tagged if len(tags_of(result)) > 1]
+        by_tag[scenario] = {**_summarize(tagged), "mixedRecordingIds": mixed_ids, "overlapsOtherScenarios": bool(mixed_ids)}
     summary: dict[str, Any] = {
         "overall": _summarize(ordered),
         "byScenario": {
-            scenario: _summarize([r for r in ordered if scenario in scenarios_by_recording.get(r["recordingId"], ())])
+            scenario: _summarize([result for result in ordered if tags_of(result) == [scenario]])
             for scenario in scenario_ids
         },
+        "mixedScenarioRecordings": [{"recordingId": result["recordingId"], "scenarios": tags_of(result)} for result in mixed],
+        "byScenarioTag": by_tag,
     }
     if scenario_groups:
-        summary["byCapability"] = {
-            group: _summarize([r for r in ordered if set(scenarios_by_recording.get(r["recordingId"], ())) & set(members)])
-            for group, members in sorted(scenario_groups.items())
-        }
+        def group_of(result: Mapping[str, Any]) -> str:
+            groups = {group for group, members in scenario_groups.items() if set(tags_of(result)) & set(members)}
+            return groups.pop() if len(groups) == 1 else "mixed"
+
+        names = sorted(scenario_groups) + ["mixed"]
+        summary["byCapability"] = {name: _summarize([r for r in ordered if group_of(r) == name]) for name in names}
     return summary

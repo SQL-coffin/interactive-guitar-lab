@@ -87,6 +87,26 @@ class RecordingMetricTests(unittest.TestCase):
         self.assertIsNone(only_false_positives["onset"]["recall"])
         self.assertEqual(only_false_positives["falsePositiveRate"], 1.0)
 
+    def test_false_positive_rate_and_false_discovery_rate_differ_when_optional_references_absorb_predictions(self) -> None:
+        refs = [n(60, 1.0), n(62, 2.0, annotation_confidence=0.2)]
+        preds = [n(60, 1.0), n(62, 2.0), n(70, 3.0)]
+        result = evaluate(refs, preds)
+        self.assertEqual((result["onset"]["truePositives"], result["onset"]["falsePositives"]), (1, 1))
+        self.assertEqual(result["counts"]["evaluatedPredictions"], 3)
+        self.assertEqual(result["counts"]["predictionsMatchedToOptional"], 1)
+        self.assertAlmostEqual(result["falsePositiveRate"], 1 / 3)        # FP / evaluated predictions
+        self.assertAlmostEqual(result["falseDiscoveryRate"], 1 / 2)       # FP / (TP + FP)
+        self.assertAlmostEqual(result["falseDiscoveryRate"], 1 - result["onset"]["precision"])
+        self.assertNotAlmostEqual(result["falsePositiveRate"], 1 - result["onset"]["precision"])
+        summary = aggregate([result], scenarios_by_recording={"rec": ["single-notes"]})["overall"]
+        self.assertAlmostEqual(summary["falsePositiveRate"], 1 / 3)
+        self.assertAlmostEqual(summary["falseDiscoveryRate"], 1 / 2)
+
+    def test_false_discovery_rate_is_null_without_predictions(self) -> None:
+        result = evaluate([n(60, 1.0)], [])
+        self.assertIsNone(result["falseDiscoveryRate"])
+        self.assertIsNone(result["falsePositiveRate"])
+
     def test_low_confidence_references_are_optional(self) -> None:
         refs = [n(60, 1.0), n(62, 2.0, annotation_confidence=0.3), n(64, 3.0, annotation_confidence=0.3)]
         preds = [n(60, 1.0), n(62, 2.0)]
@@ -136,8 +156,52 @@ class AggregateTests(unittest.TestCase):
         self.assertAlmostEqual(summary["overall"]["macroOnsetF1"], 1.0)  # b has undefined precision -> F1 undefined
         self.assertEqual(summary["overall"]["recordings"], 2)
         self.assertAlmostEqual(summary["overall"]["durationSeconds"], 5.0)
-        self.assertEqual(summary["byScenario"]["slides"]["onset"]["falseNegatives"], 2)
-        self.assertEqual(summary["byScenario"]["single-notes"]["recordings"], 2)
+        # b is tagged with two scenarios, so it is not attributed to either one's isolated result.
+        self.assertEqual(summary["byScenario"]["single-notes"]["recordingIds"], ["a"])
+        self.assertEqual(summary["byScenario"]["slides"]["recordings"], 0)
+        self.assertEqual(summary["mixedScenarioRecordings"], [{"recordingId": "b", "scenarios": ["single-notes", "slides"]}])
+
+    def test_mixed_scenario_recordings_never_count_as_isolated_scenario_accuracy(self) -> None:
+        config = MatchConfig()
+        clean = evaluate_recording("clean", [n(60, 1.0)], [n(60, 1.0)], config, duration_seconds=2.0)
+        noisy = evaluate_recording("noisy", [n(60, 1.0), n(62, 2.0)], [n(70, 1.5)], config, duration_seconds=3.0)
+        strum = evaluate_recording("strum", [n(52, 1.0), n(55, 1.01)], [n(52, 1.0)], config, duration_seconds=2.0)
+        tags = {"clean": ["single-notes"], "noisy": ["background-noise", "single-notes"], "strum": ["strumming", "polyphonic-chords"]}
+        summary = aggregate([clean, noisy, strum], scenarios_by_recording=tags,
+                            scenario_groups={"baseline": {"single-notes", "polyphonic-chords"},
+                                             "experimental": {"background-noise", "strumming"}})
+
+        # Isolated scenario results contain only recordings tagged with that scenario alone.
+        self.assertEqual(summary["byScenario"]["single-notes"]["recordingIds"], ["clean"])
+        self.assertEqual(summary["byScenario"]["single-notes"]["onset"]["f1"], 1.0)
+        for scenario in ("background-noise", "strumming", "polyphonic-chords"):
+            self.assertEqual(summary["byScenario"][scenario]["recordings"], 0)
+            self.assertIsNone(summary["byScenario"][scenario]["onset"]["f1"])
+        self.assertEqual([item["recordingId"] for item in summary["mixedScenarioRecordings"]], ["noisy", "strum"])
+
+        # Tag cohorts are kept for coverage but explicitly marked as overlapping.
+        tagged = summary["byScenarioTag"]["single-notes"]
+        self.assertEqual(tagged["recordingIds"], ["clean", "noisy"])
+        self.assertEqual(tagged["mixedRecordingIds"], ["noisy"])
+        self.assertTrue(tagged["overlapsOtherScenarios"])
+        self.assertFalse(summary["byScenarioTag"]["single-notes"] is summary["byScenario"]["single-notes"])
+
+        # Capability groups partition the recordings: baseline-only, experimental-only, mixed.
+        groups = summary["byCapability"]
+        self.assertEqual(groups["baseline"]["recordingIds"], ["clean"])
+        self.assertEqual(groups["experimental"]["recordingIds"], [])
+        self.assertEqual(groups["mixed"]["recordingIds"], ["noisy", "strum"])
+        for key in ("truePositives", "falsePositives", "falseNegatives"):
+            self.assertEqual(sum(group["onset"][key] for group in groups.values()), summary["overall"]["onset"][key])
+            isolated = sum(group["onset"][key] for group in summary["byScenario"].values())
+            mixed = sum(r["onset"][key] for r in (noisy, strum))
+            self.assertEqual(isolated + mixed, summary["overall"]["onset"][key])
+
+    def test_overall_metrics_do_not_depend_on_scenario_tags(self) -> None:
+        results = [evaluate_recording("x", [n(60, 1.0), n(64, 2.0)], [n(60, 1.0)], MatchConfig(), duration_seconds=3.0)]
+        one = aggregate(results, scenarios_by_recording={"x": ["single-notes"]})
+        many = aggregate(results, scenarios_by_recording={"x": ["single-notes", "slides", "strumming"]})
+        self.assertEqual(one["overall"], many["overall"])
 
     def test_empty_aggregate(self) -> None:
         summary = aggregate([], scenarios_by_recording={})

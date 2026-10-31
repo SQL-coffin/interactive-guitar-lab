@@ -91,7 +91,7 @@ Each annotation file has `schemaVersion`, `recordingId`, `completeness` (`comple
 **Imperfect annotations** are handled explicitly rather than assumed away:
 
 - `completeness: "partial"` plus `annotatedRegions`: only those time ranges were annotated. Predictions with an onset outside every region (widened by the onset tolerance) are ignored and reported as `ignoredPredictions`, not counted as false positives.
-- `annotationConfidence` below `--min-reference-confidence` (default 0.5) marks a note as **optional**:
+- `annotationConfidence` below `--min-reference-confidence` (default 0.5; must be a finite value from 0.0 to 1.0 inclusive) marks a note as **optional**. Notes without `annotationConfidence` are always required:
   - Matching it is not a true positive, and missing it is not a miss.
   - A prediction it absorbs is not a false positive.
   - Required notes are matched first, so optional notes never steal their matches.
@@ -113,7 +113,19 @@ Each annotation file has `schemaVersion`, `recordingId`, `completeness` (`comple
 | `strumming` | experimental | No strum grouping; staggered onsets and muted-string noise not modelled |
 | `background-noise` | experimental | Noise produces spurious candidates |
 
-Reports show totals for all recordings, the baseline group and the experimental group. Nothing is filtered out of the overall numbers.
+### How scenario results are computed
+
+Scenarios are **recording tags** (`scenarios` in the manifest), and annotations are not labelled per scenario. A recording with several tags, such as background noise plus single notes, therefore cannot be split into per-scenario parts. To keep scenario numbers honest:
+
+| Result key | Contents | Read it as |
+| --- | --- | --- |
+| `summary.overall` | Every recording once, regardless of tags | The headline result |
+| `summary.byScenario[s]` | Only recordings tagged with `s` **and nothing else** | Isolated accuracy for that scenario |
+| `summary.mixedScenarioRecordings` | Every recording with more than one tag, with its tags | Never attributed to a single scenario |
+| `summary.byScenarioTag[s]` | Every recording carrying tag `s`, mixed or not; includes `mixedRecordingIds` and `overlapsOtherScenarios` | Coverage only. Cohorts overlap, so this is **not** isolated accuracy |
+| `summary.byCapability` | Partition into `baseline` (all tags baseline), `experimental` (all tags experimental) and `mixed` (spans both) | Rows sum exactly to `overall` |
+
+The Markdown report shows isolated scenario rows. A scenario with no isolated recordings is shown as "no isolated recordings" rather than with borrowed numbers, and mixed recordings get their own table. Nothing is filtered out of the overall numbers. To get an isolated result for a scenario, record and tag dedicated takes for it.
 
 Separately, each detector declares which annotated **techniques** it supports. The heuristic baseline supports none. The report gives recall per technique, and misses on unsupported techniques are labelled "unsupported" in the error lists. This identifies a known limitation rather than presenting it as an ordinary pitch-detection failure. Those misses still count in every total.
 
@@ -127,12 +139,14 @@ Separately, each detector declares which annotated **techniques** it supports. T
 - **Open-ended predictions** (`offsetSeconds: null`): `fail` (default) never satisfies the offset criterion; `ignore-offset` skips the offset check; `extend-to-audio-end` treats the note as lasting to the end of the file.
 - **Assignment:** a maximum-cardinality bipartite matching. Candidates are explored in a fixed order: references by (onset, pitch, offset), and predictions by (|onset error|, onset, pitch, offset). Results are deterministic and independent of input order.
 
-**Metrics** (`guitar_eval/metrics.py`), reported per recording, per scenario, per capability group and overall (micro-averaged; a macro F1 is also given):
+**Metrics** (`guitar_eval/metrics.py`), reported per recording and, micro-averaged, overall, per isolated scenario, per scenario tag and per capability group (a macro F1 is also given):
 
 - **Note precision, recall and F1**, in two modes: onset (pitch + onset) and onset+offset.
 - **Pitch accuracy:** among notes whose onset was found, the share with the right pitch. Correct = pitch+onset matches. Wrong = leftover references and predictions matched on onset alone. Matching pitch first stops simultaneous chord notes from being paired arbitrarily. Octave errors are counted separately.
 - **Onset and offset timing error** (ms, prediction − reference), from onset matches: count, mean absolute, median absolute, P95 absolute (nearest rank), max absolute, mean signed (bias). Offset errors use only pairs where both offsets are known.
-- **False positive rate** = FP / evaluated predictions; **false positives per minute** is also reported.
+- **False positive rate** (`falsePositiveRate`) = FP / all evaluated predictions. The denominator includes predictions absorbed by optional references, so this is *not* 1 − precision when optional references exist.
+- **False discovery rate** (`falseDiscoveryRate`) = FP / (TP + FP) = 1 − precision, whenever precision is defined.
+- **False positives per minute** (`falsePositivesPerMinute`) = FP / audio minutes.
 - **Missed note rate** = FN / required references.
 - **Unmatched references and predictions** are listed in full in `results.json`, and the first 20 per recording in `report.md`.
 - **Undefined ratios** (0/0) are `null` / "n/a", never silently 0 or 1.

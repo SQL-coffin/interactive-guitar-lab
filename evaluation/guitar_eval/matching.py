@@ -50,13 +50,19 @@ class MatchConfig:
     open_ended_prediction_policy: OpenEndedPolicy = "fail"
     # Reference notes with annotationConfidence below this are "optional": matching them is not a
     # true positive, missing them is not a miss, and a prediction matched to one is not a false positive.
+    # Must be in [0, 1]: 0.0 makes every annotated note required; 1.0 makes every note with a
+    # confidence below 1 optional. Notes without annotationConfidence are always required.
     min_reference_confidence: float = 0.5
 
     def __post_init__(self) -> None:
-        for name in ("onset_tolerance_seconds", "offset_ratio", "offset_min_tolerance_seconds", "min_reference_confidence"):
+        for name in ("onset_tolerance_seconds", "offset_ratio", "offset_min_tolerance_seconds"):
             value = getattr(self, name)
             if not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
                 raise ValueError(f"{name} must be a finite, non-negative number.")
+        confidence = self.min_reference_confidence
+        if (isinstance(confidence, bool) or not isinstance(confidence, (int, float))
+                or not math.isfinite(confidence) or not 0.0 <= confidence <= 1.0):
+            raise ValueError("min_reference_confidence must be a finite number from 0.0 to 1.0 inclusive.")
         if not isinstance(self.pitch_tolerance_semitones, int) or self.pitch_tolerance_semitones < 0:
             raise ValueError("pitch_tolerance_semitones must be a non-negative integer.")
         if self.open_ended_prediction_policy not in OPEN_ENDED_POLICIES:

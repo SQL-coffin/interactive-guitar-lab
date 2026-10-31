@@ -101,6 +101,13 @@ class OffsetMatchingTests(unittest.TestCase):
         result = match_notes([ref(60, 1.0, None)], [pred(60, 1.0, 1.5)], MatchConfig(), require_offset=True)
         self.assertEqual(result.pairs, [(0, 0)])
 
+    def test_min_reference_confidence_must_be_a_finite_value_between_zero_and_one(self) -> None:
+        self.assertEqual(MatchConfig(min_reference_confidence=0.0).min_reference_confidence, 0.0)
+        self.assertEqual(MatchConfig(min_reference_confidence=1.0).min_reference_confidence, 1.0)
+        for value in (-0.0001, -1.0, 1.0001, 2.0, float("nan"), float("inf"), float("-inf"), True, "0.5", None):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                MatchConfig(min_reference_confidence=value)  # type: ignore[arg-type]
+
     def test_rejects_invalid_configuration(self) -> None:
         for kwargs in ({"onset_tolerance_seconds": -1}, {"offset_ratio": -0.1}, {"open_ended_prediction_policy": "guess"}):
             with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
